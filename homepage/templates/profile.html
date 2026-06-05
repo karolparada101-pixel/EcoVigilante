@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Perfil | Ecovigilante</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Sora:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+</head>
+<body>
+  <main class="users-page dashboard-page">
+    <div class="page-tools">
+      <a href="{{ url_for('home') }}" class="tool-link">Inicio</a>
+      <a href="{{ url_for(session_dashboard_endpoint) }}" class="tool-link">Panel</a>
+      <a href="{{ url_for('profile') }}" class="tool-link active">Perfil</a>
+      <a href="{{ url_for('logout') }}" class="tool-link">Cerrar sesión</a>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <section class="section flash-section narrow-section">
+          <div class="flash-stack">
+            {% for category, message in messages %}
+              <div class="flash-message {{ category }}">{{ message }}</div>
+            {% endfor %}
+          </div>
+        </section>
+      {% endif %}
+    {% endwith %}
+
+    <section class="section narrow-section">
+      <div class="profile-hero">
+        <article class="card profile-card">
+          <div class="profile-photo">
+            {% if user.foto_perfil %}
+              <img src="{{ url_for('static', filename=user.foto_perfil) }}" alt="Foto de perfil de {{ user.nombres }}">
+            {% else %}
+              <span>{{ user.nombres[:1] }}{{ user.apellidos[:1] }}</span>
+            {% endif %}
+          </div>
+          <span class="section-tag">{{ user.tipo_usuario or 'Usuario' }}</span>
+          <h1>{{ user.nombres }} {{ user.apellidos }}</h1>
+          <p>{{ user.usuario }}</p>
+          <div class="profile-actions">
+            <a href="{{ url_for('recovery_file') }}" class="button primary">Archivo de recuperación</a>
+            <a href="{{ url_for('logout') }}" class="button secondary">Cerrar sesión</a>
+          </div>
+        </article>
+
+        <article class="card dashboard-card">
+          <span class="section-tag">Editar perfil</span>
+          <form method="post" class="auth-form compact-form" enctype="multipart/form-data" autocomplete="off">
+            <div class="auth-grid">
+              <div>
+                <label for="nombres">Nombres</label>
+                <input type="text" id="nombres" name="nombres" value="{{ user.nombres }}" required>
+              </div>
+              <div>
+                <label for="apellidos">Apellidos</label>
+                <input type="text" id="apellidos" name="apellidos" value="{{ user.apellidos }}" required>
+              </div>
+              <div>
+                <label for="id_tipo_documento">Tipo de documento</label>
+                <select id="id_tipo_documento" name="id_tipo_documento" required>
+                  {% for item in document_types %}
+                    <option value="{{ item.id }}" {% if item.descripcion == user.tipo_documento %}selected{% endif %}>{{ item.descripcion }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div>
+                <label for="numero_documento">Numero de documento</label>
+                <input type="text" id="numero_documento" name="numero_documento" value="{{ user.numero_documento }}" required>
+              </div>
+              <div>
+                <label for="id_tipo_genero">Genero</label>
+                <select id="id_tipo_genero" name="id_tipo_genero" required>
+                  {% for item in gender_types %}
+                    <option value="{{ item.id }}" {% if item.descripcion == user.tipo_genero %}selected{% endif %}>{{ item.descripcion }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div>
+                <label for="telefono">Telefono</label>
+                <input type="text" id="telefono" name="telefono" value="{{ user.telefono }}" required>
+              </div>
+              <div class="auth-grid-full">
+                <label for="correo">Correo</label>
+                <input type="email" id="correo" name="correo" value="{{ user.correo }}" required>
+              </div>
+              <div class="auth-grid-full">
+                <label for="foto_perfil">Foto de perfil</label>
+                <input type="file" id="foto_perfil" name="foto_perfil" accept=".jpg,.jpeg,.png,.webp">
+              </div>
+            </div>
+            <button type="submit" class="button primary auth-submit">Guardar perfil</button>
+          </form>
+        </article>
+      </div>
+    </section>
+
+    <section class="section narrow-section">
+      <div class="dashboard-grid">
+        <article class="card dashboard-card">
+          <span class="section-tag">Datos personales</span>
+          <div class="detail-list">
+            <div class="detail-item"><span>Nombres</span><strong>{{ user.nombres }}</strong></div>
+            <div class="detail-item"><span>Apellidos</span><strong>{{ user.apellidos }}</strong></div>
+            <div class="detail-item"><span>Documento</span><strong>{{ user.tipo_documento or 'Sin dato' }} {{ user.numero_documento }}</strong></div>
+            <div class="detail-item"><span>Genero</span><strong>{{ user.tipo_genero or 'Sin dato' }}</strong></div>
+          </div>
+        </article>
+
+        <article class="card dashboard-card">
+          <span class="section-tag">Datos de contacto</span>
+          <div class="detail-list">
+            <div class="detail-item"><span>Correo</span><strong>{{ user.correo }}</strong></div>
+            <div class="detail-item"><span>Telefono</span><strong>{{ user.telefono }}</strong></div>
+            <div class="detail-item"><span>Usuario</span><strong>{{ user.usuario }}</strong></div>
+            <div class="detail-item"><span>Fecha de registro</span><strong>{{ user.fecha_registro }}</strong></div>
+          </div>
+        </article>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

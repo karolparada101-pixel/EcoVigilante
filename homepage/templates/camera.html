@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ecovigilante | Cámara IA</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Sora:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='camera/css/camera.css') }}">
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+</head>
+<body class="camera-page">
+    <header class="camera-header">
+        <nav class="topbar">
+            <div class="brand">
+                <span class="brand-mark">Eco</span>
+                <span class="brand-name">vigilante</span>
+            </div>
+            <div class="topbar-note">UNIESPINAL · Camara inteligente de residuos</div>
+        </nav>
+
+        <div class="page-tools">
+            <a href="{{ url_for('home') }}" class="tool-link">Inicio</a>
+            <a href="{{ url_for('camera_page') }}" class="tool-link active">
+                <span aria-hidden="true">&#128247;</span>
+                <span>Cámara IA</span>
+            </a>
+            {% if session_user_id %}
+                <a href="{{ url_for(session_dashboard_endpoint) }}" class="tool-link">Panel</a>
+                <a href="{{ url_for('profile') }}" class="tool-link">Perfil</a>
+                <a href="{{ url_for('logout') }}" class="tool-link">Cerrar sesión</a>
+            {% else %}
+                <a href="{{ url_for('login') }}" class="tool-link">Iniciar sesión</a>
+                <a href="{{ url_for('register') }}" class="tool-link">Registrarse</a>
+            {% endif %}
+        </div>
+    </header>
+
+    <main class="container">
+        <div class="hero">
+            <h1>Clasifica tus residuos con <span class="highlight">Inteligencia Artificial</span></h1>
+            <p>Usa tu c&aacute;mara o sube una foto. El sistema detecta <strong>residuos</strong> y <strong>personas</strong> en tiempo real.</p>
+        </div>
+
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="camera">
+                <span class="tab-icon">&#128247;</span> C&aacute;mara en vivo
+            </button>
+            <button class="tab-btn" data-tab="upload">
+                <span class="tab-icon">&#128194;</span> Subir imagen
+            </button>
+        </div>
+
+        <div class="tab-content active" id="tab-camera">
+            <div class="camera-section">
+                <div class="video-wrapper">
+                    <video id="video" autoplay playsinline muted></video>
+                    <canvas id="overlayCanvas"></canvas>
+                    <div class="video-overlay" id="videoOverlay">
+                        <div class="overlay-icon">&#128247;</div>
+                        <p>Haz clic en "Activar c&aacute;mara" para comenzar</p>
+                    </div>
+                </div>
+
+                <div id="snapshotFlash"></div>
+
+                <div class="camera-controls">
+                    <button id="startCamera" class="btn btn-primary">
+                        <span>&#128247;</span> Activar c&aacute;mara
+                    </button>
+                    <button id="stopCamera" class="btn btn-secondary" disabled>
+                        <span>&#9632;</span> Detener
+                    </button>
+                    <span class="auto-status" id="autoStatus"></span>
+                </div>
+
+                <div class="face-recognition-panel" id="faceRecognitionPanel">
+                    <div>
+                        <span class="live-panel-header">
+                            <span class="live-indicator"></span>
+                            <span>Reconocimiento facial</span>
+                        </span>
+                        <p id="faceRecognitionStatus">Esperando inicio de c&aacute;mara...</p>
+                    </div>
+                </div>
+
+                <div class="live-panel" id="livePanel" style="display:none;">
+                    <div class="live-panel-header">
+                        <span class="live-indicator"></span>
+                        <span>Detecci&oacute;n en vivo</span>
+                    </div>
+                    <div class="live-stats">
+                        <div class="live-stat-card persons-card">
+                            <div class="stat-icon">&#128100;</div>
+                            <div class="stat-info">
+                                <span class="stat-value" id="livePersonCount">0</span>
+                                <span class="stat-label">Personas</span>
+                            </div>
+                        </div>
+                        <div class="live-stat-card">
+                            <div class="stat-icon" style="color:#22c55e">&#267b;</div>
+                            <div class="stat-info">
+                                <span class="stat-value" id="liveCountAprovechable">0</span>
+                                <span class="stat-label">Aprovechables</span>
+                            </div>
+                        </div>
+                        <div class="live-stat-card">
+                            <div class="stat-icon" style="color:#ef4444">&#9971;</div>
+                            <div class="stat-info">
+                                <span class="stat-value" id="liveCountNoAprovechable">0</span>
+                                <span class="stat-label">No aprovech.</span>
+                            </div>
+                        </div>
+                        <div class="live-stat-card">
+                            <div class="stat-icon" style="color:#3b82f6">&#9754;</div>
+                            <div class="stat-info">
+                                <span class="stat-value" id="liveCountOrganico">0</span>
+                                <span class="stat-label">Org&aacute;nicos</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="live-badge" id="liveMainBadge" style="display:none;">
+                        <span>Clasificaci&oacute;n principal:</span>
+                        <span class="live-badge-value" id="liveMainCategory"></span>
+                    </div>
+                    <div class="live-items" id="liveItemsContainer">
+                        <div class="live-items-header">
+                            <span>&#128230; Residuos detectados</span>
+                            <span class="live-items-count" id="liveItemsCount">0</span>
+                        </div>
+                        <div class="live-items-list" id="liveItemsList"></div>
+                    </div>
+                    <div class="live-persons" id="livePersonsContainer">
+                        <div class="live-items-header">
+                            <span>&#128100; Personas detectadas</span>
+                            <span class="live-items-count" id="livePersonsCount">0</span>
+                        </div>
+                        <div class="live-persons-list" id="livePersonsList"></div>
+                    </div>
+                    <div class="live-containers" id="liveContainerSection" style="display:none;">
+                        <div class="live-items-header">
+                            <span>&#128230; Canecas detectadas</span>
+                            <span class="live-items-count" id="liveContainersCount">0</span>
+                        </div>
+                        <div class="live-items-list" id="liveContainerList"></div>
+                    </div>
+                    <div class="validation-badge" id="liveValidationBadge" style="display:none;">
+                        <span class="validation-msg" id="liveValidationMsg"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-content" id="tab-upload">
+            <div class="upload-section">
+                <div class="upload-zone" id="uploadZone">
+                    <div class="upload-icon">&#128194;</div>
+                    <p>Arrastra una imagen aqu&iacute; o haz clic para seleccionar</p>
+                    <span class="upload-hint">JPG, PNG o WEBP - M&aacute;x 16MB</span>
+                    <input type="file" id="fileInput" accept="image/*" hidden>
+                </div>
+                <div class="preview-container" id="previewContainer" style="display:none;">
+                    <img id="previewImage" alt="Vista previa">
+                    <button id="classifyUploadBtn" class="btn btn-accent">
+                        <span>&#128269;</span> Clasificar imagen
+                    </button>
+                    <button id="changeImageBtn" class="btn btn-secondary">
+                        <span>&#128260;</span> Cambiar imagen
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="results-panel" id="resultsPanel" style="display:none;">
+            <div class="results-header">
+                <h2>&#128200; Resultados de la clasificaci&oacute;n</h2>
+            </div>
+            <div class="face-recognition-result" id="resultsFaceSection" style="display:none;">
+                <div class="result-user-card">
+                    <div class="result-user-avatar">&#128100;</div>
+                    <div class="result-user-info">
+                        <strong id="resultsUserName">---</strong>
+                        <span id="resultsUserDocument">---</span>
+                    </div>
+                    <div class="result-user-eco">
+                        <span class="eco-badge eco-points">EcoPuntos: <span id="resultsUserEcoPoints">0</span></span>
+                        <span class="eco-badge eco-fines">EcoMultas: <span id="resultsUserEcoFines">0</span></span>
+                        <span class="eco-badge eco-balance">Saldo: <span id="resultsUserBalance">0</span></span>
+                    </div>
+                    <div class="face-eco-actions">
+                        <button type="button" class="btn btn-primary" id="resultsAddEcoPoint">+ Sumar ecopunto</button>
+                        <button type="button" class="btn btn-secondary" id="resultsAddEcoFine">+ Registrar ecomulta</button>
+                    </div>
+                </div>
+            </div>
+            <div id="annotatedContainer" class="annotated-container" style="display:none;">
+                <h3>Imagen analizada</h3>
+                <img id="annotatedImage" alt="Imagen analizada">
+            </div>
+            <div class="summary-cards" id="summaryCards">
+                <div class="summary-card aprovechable">
+                    <div class="card-icon">&#267b;</div>
+                    <div class="card-content">
+                        <span class="card-count" id="countAprovechable">0</span>
+                        <span class="card-label">Aprovechables</span>
+                    </div>
+                </div>
+                <div class="summary-card no-aprovechable">
+                    <div class="card-icon">&#9971;</div>
+                    <div class="card-content">
+                        <span class="card-count" id="countNoAprovechable">0</span>
+                        <span class="card-label">No aprovechables</span>
+                    </div>
+                </div>
+                <div class="summary-card organico">
+                    <div class="card-icon">&#9754;</div>
+                    <div class="card-content">
+                        <span class="card-count" id="countOrganico">0</span>
+                        <span class="card-label">Org&aacute;nicos</span>
+                    </div>
+                </div>
+            </div>
+            <div class="main-category-badge" id="mainCategoryBadge" style="display:none;">
+                <span class="badge-label">Clasificaci&oacute;n principal:</span>
+                <span class="badge-value" id="mainCategoryValue"></span>
+            </div>
+            <div class="detections-list" id="detectionsList">
+                <h3>Objetos detectados</h3>
+                <div class="detections-table-wrapper">
+                    <table class="detections-table">
+                        <thead>
+                            <tr>
+                                <th>Objeto</th>
+                                <th>Categor&iacute;a</th>
+                                <th>Confianza</th>
+                            </tr>
+                        </thead>
+                        <tbody id="detectionsBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="loading-overlay" id="loadingOverlay" style="display:none;">
+            <div class="spinner"></div>
+            <p>Analizando imagen...</p>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <p>EcoIA - Clasificador de Residuos con Visi&oacute;n Artificial &copy; 2026</p>
+    </footer>
+
+    <script src="{{ url_for('static', filename='camera/js/main.js') }}"></script>
+</body>
+</html>

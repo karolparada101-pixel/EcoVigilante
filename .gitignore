@@ -1,0 +1,29 @@
+# Ignorar backups y zips
+*.zip
+*.rar
+*.7z
+
+# Ignorar carpetas ajenas al proyecto
+/CRUD/
+/DURC/
+/Ejercicios/
+/Holamundo/
+/parcial/
+/tareadiplomado/
+
+# Ignorar modelos grandes (se descargan aparte)
+/homepage/yolov8m.pt
+
+# Ignorar archivos de entorno y caché
+.env
+__pycache__/
+*.pyc
+.ultralytics/
+.matplotlib/
+
+# Ignorar uploads temporales
+static/camera/uploads/
+
+# Ignorar fotos de rostro (datos sensibles)
+static/face_dataset/*
+!static/face_dataset/.gitkeep

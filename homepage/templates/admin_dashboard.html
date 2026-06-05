@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Administrador | Ecovigilante</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Sora:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+</head>
+<body>
+  <main class="users-page dashboard-page">
+    <div class="page-tools">
+      <a href="{{ url_for('home') }}" class="tool-link">Inicio</a>
+      <a href="{{ url_for('admin_dashboard') }}" class="tool-link active">Admin</a>
+      <a href="{{ url_for('users') }}" class="tool-link">Usuarios</a>
+      <a href="{{ url_for('profile') }}" class="tool-link">Perfil</a>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <section class="section flash-section narrow-section">
+          <div class="flash-stack">
+            {% for category, message in messages %}
+              <div class="flash-message {{ category }}">{{ message }}</div>
+            {% endfor %}
+          </div>
+        </section>
+      {% endif %}
+    {% endwith %}
+
+    <section class="section narrow-section">
+      <div class="dashboard-hero">
+        <div class="dashboard-title">
+          <span class="section-tag">Panel administrador</span>
+          <h1 class="page-title">{{ user.nombres }} {{ user.apellidos }}</h1>
+          <p>
+            Gestiona la lectura general de usuarios del sistema, revisa la distribución por tipo
+            y valida que los perfiles de estudiante, docente y administrador estén actualizados.
+          </p>
+        </div>
+        <div class="dashboard-username-card">
+          <span class="dashboard-mini-label">Usuarios registrados</span>
+          <strong>{{ users|length }}</strong>
+          <p>{{ user.usuario }}</p>
+        </div>
+      </div>
+    </section>
+
+    {% if db_message %}
+      <section class="section narrow-section">
+        <article class="card status-card">
+          <h3>Estado de conexión</h3>
+          <p>{{ db_message }}</p>
+          <p>Intenta nuevamente o revisa que el servicio principal este disponible.</p>
+        </article>
+      </section>
+    {% else %}
+      <section class="section narrow-section">
+        <div class="role-summary-grid">
+          {% for item in type_counts %}
+            <article class="metric-panel">
+              <span class="metric-panel-label">{{ item.tipo_usuario }}</span>
+              <strong>{{ item.total }}</strong>
+              <p>Usuarios vinculados a este tipo.</p>
+            </article>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="section narrow-section">
+        <div class="admin-search-card">
+          <label for="adminUserSearch">Buscar usuarios</label>
+          <input type="search" id="adminUserSearch" placeholder="Buscar por nombre, correo, documento, usuario o tipo">
+        </div>
+
+        <div class="table-shell">
+          <table class="users-table admin-users-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Usuario</th>
+                <th>Tipo usuario</th>
+                <th>Nombres</th>
+                <th>Apellidos</th>
+                <th>Documento</th>
+                <th>Genero</th>
+                <th>Correo</th>
+                <th>Telefono</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for listed_user in users %}
+                <tr data-user-row data-search="{{ listed_user.id }} {{ listed_user.usuario }} {{ listed_user.tipo_usuario }} {{ listed_user.nombres }} {{ listed_user.apellidos }} {{ listed_user.numero_documento }} {{ listed_user.correo }} {{ listed_user.telefono }}">
+                  <td>#{{ listed_user.id }}</td>
+                  <td>{{ listed_user.usuario }}</td>
+                  <td>{{ listed_user.tipo_usuario or 'Sin tipo' }}</td>
+                  <td>{{ listed_user.nombres }}</td>
+                  <td>{{ listed_user.apellidos }}</td>
+                  <td>{{ listed_user.tipo_documento or 'Sin dato' }} {{ listed_user.numero_documento }}</td>
+                  <td>{{ listed_user.tipo_genero or 'Sin dato' }}</td>
+                  <td>{{ listed_user.correo }}</td>
+                  <td>{{ listed_user.telefono }}</td>
+                  <td>
+                    <span class="status-pill {{ 'is-active' if listed_user.activo else 'is-disabled' }}">
+                      {{ 'Activo' if listed_user.activo else 'Inhabilitado' }}
+                    </span>
+                  </td>
+                  <td>
+                    <div class="admin-row-actions">
+                      <details class="admin-edit-details">
+                        <summary>Editar</summary>
+                        <form method="post" action="{{ url_for('admin_edit_user', user_id=listed_user.id) }}" class="admin-edit-form">
+                          <div>
+                            <label>Nombres</label>
+                            <input type="text" name="nombres" value="{{ listed_user.nombres }}" required>
+                          </div>
+                          <div>
+                            <label>Apellidos</label>
+                            <input type="text" name="apellidos" value="{{ listed_user.apellidos }}" required>
+                          </div>
+                          <div>
+                            <label>Tipo documento</label>
+                            <select name="id_tipo_documento" required>
+                              {% for item in document_types %}
+                                <option value="{{ item.id }}" {% if item.descripcion == listed_user.tipo_documento %}selected{% endif %}>{{ item.descripcion }}</option>
+                              {% endfor %}
+                            </select>
+                          </div>
+                          <div>
+                            <label>Numero documento</label>
+                            <input type="text" name="numero_documento" value="{{ listed_user.numero_documento }}" required>
+                          </div>
+                          <div>
+                            <label>Genero</label>
+                            <select name="id_tipo_genero" required>
+                              {% for item in gender_types %}
+                                <option value="{{ item.id }}" {% if item.descripcion == listed_user.tipo_genero %}selected{% endif %}>{{ item.descripcion }}</option>
+                              {% endfor %}
+                            </select>
+                          </div>
+                          <div>
+                            <label>Tipo usuario</label>
+                            <select name="id_tipo_usuario" required>
+                              {% for item in user_types %}
+                                <option value="{{ item.id }}" {% if item.descripcion == listed_user.tipo_usuario %}selected{% endif %}>{{ item.descripcion }}</option>
+                              {% endfor %}
+                            </select>
+                          </div>
+                          <div>
+                            <label>Correo</label>
+                            <input type="email" name="correo" value="{{ listed_user.correo }}" required>
+                          </div>
+                          <div>
+                            <label>Telefono</label>
+                            <input type="text" name="telefono" value="{{ listed_user.telefono }}" required>
+                          </div>
+                          <button type="submit" class="button primary admin-small-button">Guardar</button>
+                        </form>
+                      </details>
+
+                      <form method="post" action="{{ url_for('admin_toggle_user_status', user_id=listed_user.id) }}">
+                        <input type="hidden" name="activo" value="{{ 0 if listed_user.activo else 1 }}">
+                        <button type="submit" class="button secondary admin-small-button">
+                          {{ 'Inhabilitar' if listed_user.activo else 'Habilitar' }}
+                        </button>
+                      </form>
+                    </div>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    {% endif %}
+  </main>
+  <script>
+    (function () {
+      const search = document.getElementById("adminUserSearch");
+      const rows = document.querySelectorAll("[data-user-row]");
+      if (!search || !rows.length) return;
+
+      search.addEventListener("input", function () {
+        const value = search.value.trim().toLowerCase();
+        rows.forEach(function (row) {
+          const text = (row.dataset.search || "").toLowerCase();
+          row.style.display = text.includes(value) ? "" : "none";
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

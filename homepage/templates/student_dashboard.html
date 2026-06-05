@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Estudiante | Ecovigilante</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Sora:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+</head>
+<body>
+  <main class="users-page dashboard-page">
+    <div class="page-tools">
+      <a href="{{ url_for('home') }}" class="tool-link">Inicio</a>
+      <a href="{{ url_for('student_dashboard') }}" class="tool-link active">Estudiante</a>
+      <a href="{{ url_for('profile') }}" class="tool-link">Perfil</a>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <section class="section flash-section narrow-section">
+          <div class="flash-stack">
+            {% for category, message in messages %}
+              <div class="flash-message {{ category }}">{{ message }}</div>
+            {% endfor %}
+          </div>
+        </section>
+      {% endif %}
+    {% endwith %}
+
+    <section class="section narrow-section">
+      <div class="dashboard-hero">
+        <div class="dashboard-title">
+          <span class="section-tag">Panel estudiante</span>
+          <h1 class="page-title">{{ user.nombres }} {{ user.apellidos }}</h1>
+          <p>
+            Consulta tu identidad dentro de Ecovigilante, tu usuario de acceso y el estado inicial de
+            ecopuntos, ecomultas y saldo ambiental para el seguimiento de segregación de residuos.
+          </p>
+        </div>
+        <div class="dashboard-username-card">
+          <span class="dashboard-mini-label">Tipo de usuario</span>
+          <strong>{{ user.tipo_usuario or 'Estudiante' }}</strong>
+          <p>{{ user.usuario }}</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section narrow-section">
+      <div class="dashboard-metrics">
+        <article class="metric-panel">
+          <span class="metric-panel-label">Ecopuntos</span>
+          <strong>{{ user.ecopuntos }}</strong>
+          <p>Puntaje acumulado por residuos correctamente segregados.</p>
+        </article>
+        <article class="metric-panel metric-panel-alert">
+          <span class="metric-panel-label">Ecomultas</span>
+          <strong>{{ user.ecomultas }}</strong>
+          <p>Registro preventivo asociado a segregaciones incorrectas.</p>
+        </article>
+        <article class="metric-panel">
+          <span class="metric-panel-label">Saldo ambiental</span>
+          <strong>{{ user.saldo_ambiental }}</strong>
+          <p>Diferencia actual entre acciones positivas y correctivas.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section narrow-section">
+      <div class="class-share-panel">
+        <article class="card dashboard-card class-code-card">
+          <span class="section-tag">Inscripcion a clase</span>
+          <h3>Ingresar codigo</h3>
+          <p>Escribe el codigo que aparece debajo del QR del docente.</p>
+          <form method="post" action="{{ url_for('enroll_by_class_code') }}" class="auth-form compact-form" autocomplete="off">
+            <label for="codigo_clase">Codigo de clase</label>
+            <input
+              type="text"
+              id="codigo_clase"
+              name="codigo_clase"
+              placeholder="Ejemplo: A7K9Q2"
+              required
+            >
+            <button type="submit" class="button primary auth-submit">Inscribirme</button>
+          </form>
+        </article>
+
+        <article class="card dashboard-card">
+          <span class="section-tag">Inscripcion por QR</span>
+          <div class="action-list">
+            <div class="action-item">
+              <strong>Escanea el QR del docente</strong>
+              <p>El QR abre un enlace seguro. Inicia sesión y el sistema te inscribe automáticamente.</p>
+            </div>
+            <div class="action-item">
+              <strong>Codigo manual</strong>
+              <p>Si no puedes escanear, usa el codigo de clase en el formulario de esta pantalla.</p>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section narrow-section">
+      <div class="section-heading">
+        <span class="section-tag">Mis estadisticas</span>
+        <h2>Rendimiento en clasificacion</h2>
+      </div>
+      <div id="statsContainer" class="dashboard-metrics" style="margin-bottom:20px;">
+        <article class="metric-panel" style="text-align:center;">
+          <span class="metric-panel-label">Clasificaciones</span>
+          <strong id="statTotal">--</strong>
+        </article>
+        <article class="metric-panel" style="text-align:center;">
+          <span class="metric-panel-label">Correctas</span>
+          <strong id="statCorrectas" style="color:#16a34a">--</strong>
+        </article>
+        <article class="metric-panel metric-panel-alert" style="text-align:center;">
+          <span class="metric-panel-label">Incorrectas</span>
+          <strong id="statIncorrectas" style="color:#dc2626">--</strong>
+        </article>
+        <article class="metric-panel" style="text-align:center;">
+          <span class="metric-panel-label">% Aciertos</span>
+          <strong id="statPorcentaje">--</strong>
+        </article>
+      </div>
+      <div id="historialContainer" class="table-shell compact-table-shell" style="display:none;">
+        <table class="users-table compact-users-table">
+          <thead>
+            <tr>
+              <th>Residuo</th>
+              <th>Categoria</th>
+              <th>Caneca</th>
+              <th>Resultado</th>
+              <th>Confianza</th>
+              <th>Fecha</th>
+            </tr>
+          </thead>
+          <tbody id="historialBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section narrow-section">
+      <div class="section-heading">
+        <span class="section-tag">Mis clases</span>
+        <h2>Clases inscritas</h2>
+      </div>
+
+      {% if enrollments %}
+        <div class="class-list">
+          {% for item in enrollments %}
+            <article class="card class-list-card">
+              <span class="section-tag">{{ item.codigo }}</span>
+              <h3>{{ item.nombre }}</h3>
+              <p>Docente: {{ item.docente_nombres }} {{ item.docente_apellidos }}</p>
+              <p>Inscripcion: {{ item.fecha_inscripcion }}</p>
+            </article>
+          {% endfor %}
+        </div>
+      {% else %}
+        <article class="card status-card">
+          <h3>Sin clases inscritas</h3>
+          <p>Escanea el QR del docente o ingresa el codigo para vincularte a una clase.</p>
+        </article>
+      {% endif %}
+    </section>
+  </main>
+
+  <script>
+    fetch('/api/estadisticas/{{ user.id }}')
+      .then(r => r.json())
+      .then(data => {
+        if (!data.ok) return;
+        document.getElementById('statTotal').textContent = data.total;
+        document.getElementById('statCorrectas').textContent = data.correctas;
+        document.getElementById('statIncorrectas').textContent = data.incorrectas;
+        document.getElementById('statPorcentaje').textContent = data.porcentaje_aciertos + '%';
+        var tbody = document.getElementById('historialBody');
+        if (data.historial && data.historial.length > 0) {
+          document.getElementById('historialContainer').style.display = 'block';
+          data.historial.forEach(function(r) {
+            var tr = document.createElement('tr');
+            var icono = r.es_correcto ? '\u2705' : '\u274c';
+            var color = r.es_correcto ? '#16a34a' : '#dc2626';
+            tr.innerHTML = '<td>' + (r.residuo_detectado || '---') + '</td>' +
+              '<td>' + (r.categoria_asignada || '---') + '</td>' +
+              '<td>' + (r.container_color || '---') + '</td>' +
+              '<td style="color:' + color + ';font-weight:700">' + icono + ' ' + (r.es_correcto ? 'Correcto' : 'Incorrecto') + '</td>' +
+              '<td>' + Math.round((r.confianza_modelo || 0) * 100) + '%</td>' +
+              '<td>' + (r.fecha_hora || '').slice(0, 19) + '</td>';
+            tbody.appendChild(tr);
+          });
+        }
+      })
+      .catch(function() {});
+  </script>
+</body>
+</html>

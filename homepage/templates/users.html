@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Usuarios Registrados | Ecovigilante</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Sora:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+</head>
+<body>
+  <main class="users-page">
+    <div class="page-tools">
+      <a href="{{ url_for('home') }}" class="tool-link">Inicio</a>
+     
+      {% if session_user_id %}
+        <a href="{{ url_for(session_dashboard_endpoint) }}" class="tool-link">Panel</a>
+        <a href="{{ url_for('profile') }}" class="tool-link">Perfil</a>
+        <a href="{{ url_for('logout') }}" class="tool-link">Cerrar sesión</a>
+      {% else %}
+        <a href="{{ url_for('login') }}" class="tool-link">Iniciar sesión</a>
+        <a href="{{ url_for('register') }}" class="tool-link">Registrarse</a>
+      {% endif %}
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <section class="section flash-section narrow-section">
+          <div class="flash-stack">
+            {% for category, message in messages %}
+              <div class="flash-message {{ category }}">{{ message }}</div>
+            {% endfor %}
+          </div>
+        </section>
+      {% endif %}
+    {% endwith %}
+
+    <section class="section narrow-section">
+      <div class="section-heading">
+        <span class="section-tag">Lectura de usuarios</span>
+        <!--<h1 class="page-title">Usuarios registrados desde el CRUD</h1>-->
+        <p>Consulta los usuarios registrados junto con documento, genero y tipo de usuario.</p>
+      </div>
+
+      {% if db_message %}
+        <article class="card status-card">
+          <h3>Estado de conexion</h3>
+          <p>{{ db_message }}</p>
+          <p>Intenta nuevamente o revisa que el servicio principal este disponible.</p>
+        </article>
+      {% else %}
+        <div class="users-toolbar">
+          <div class="users-summary">
+            <span class="users-count">{{ users|length }}</span>
+            <p>usuarios encontrados en el sistema</p>
+          </div>
+          <div class="users-actions">
+            <a href="{{ url_for('register') }}" class="button primary">Agregar usuario</a>
+            <a href="{{ url_for('login') }}" class="button secondary">Validar acceso</a>
+          </div>
+        </div>
+
+        {% if users %}
+          <div class="table-shell">
+            <table class="users-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Usuario</th>
+                  <th>Nombres</th>
+                  <th>Apellidos</th>
+                  <th>Tipo documento</th>
+                  <th>Numero documento</th>
+                  <th>Genero</th>
+                  <th>Tipo usuario</th>
+                  <th>Correo</th>
+                  <th>Telefono</th>
+                  <th>Fecha registro</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for user in users %}
+                  <tr>
+                    <td>#{{ user.id }}</td>
+                    <td>{{ user.usuario }}</td>
+                    <td>{{ user.nombres }}</td>
+                    <td>{{ user.apellidos }}</td>
+                    <td>{{ user.tipo_documento or 'Sin dato' }}</td>
+                    <td>{{ user.numero_documento }}</td>
+                    <td>{{ user.tipo_genero or 'Sin dato' }}</td>
+                    <td>{{ user.tipo_usuario or 'Sin tipo' }}</td>
+                    <td>{{ user.correo }}</td>
+                    <td>{{ user.telefono }}</td>
+                    <td>{{ user.fecha_registro }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <article class="card status-card">
+            <h3>Sin registros todavia</h3>
+            <p>No se encontraron usuarios registrados. Puedes usar el botón de registro para crear el primero.</p>
+          </article>
+        {% endif %}
+      {% endif %}
+    </section>
+  </main>
+</body>
+</html>

@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Segregación de Residuos</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Nunito', sans-serif;
+    background: #1a2e1a;
+    min-height: 100vh;
+    overflow-x: hidden;
+    user-select: none;
+  }
+
+  #scene {
+    position: relative;
+    width: 100%;
+    height: 100vh;
+    min-height: 600px;
+    overflow: hidden;
+  }
+
+  /* SKY */
+  #sky {
+    position: absolute; top: 0; left: 0; width: 100%; height: 55%;
+    background: linear-gradient(180deg, #87CEEB 0%, #b8e4f7 100%);
+    transition: background 2s ease;
+  }
+  #sky.polluted { background: linear-gradient(180deg, #7a6e5a 0%, #a89878 100%); }
+
+  /* SUN */
+  #sun {
+    position: absolute; top: 30px; right: 80px;
+    width: 64px; height: 64px;
+    background: radial-gradient(circle, #FFE44D 60%, #FFD700 100%);
+    border-radius: 50%;
+    box-shadow: 0 0 30px 10px rgba(255,228,77,0.4);
+    transition: opacity 2s, filter 2s;
+  }
+  #sky.polluted #sun { filter: brightness(0.5) sepia(1); }
+
+  /* GROUND */
+  #ground {
+    position: absolute; bottom: 0; left: 0; width: 100%; height: 46%;
+    background: linear-gradient(180deg, #4a7c3f 0%, #3a6230 60%, #2e4e26 100%);
+    transition: background 2s ease;
+  }
+  #ground.dead { background: linear-gradient(180deg, #7a6040 0%, #5a4830 60%, #3e3220 100%); }
+
+  /* GRASS LINE */
+  #grass-line {
+    position: absolute;
+    bottom: 44%;
+    left: 0; width: 100%;
+    height: 28px;
+    background: #5aaa45;
+    border-radius: 50% 50% 0 0 / 8px 8px 0 0;
+    transition: background 2s;
+  }
+  #grass-line.dead { background: #7a6040; }
+
+  /* TREES CONTAINER */
+  #trees {
+    position: absolute;
+    bottom: 44%;
+    left: 0; width: 100%;
+    height: 200px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-around;
+    padding: 0 5%;
+    pointer-events: none;
+  }
+
+  .tree {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    transform-origin: bottom center;
+    transition: transform 1.2s cubic-bezier(0.34,1.56,0.64,1), opacity 1.2s;
+    transform: scaleY(1);
+    opacity: 1;
+  }
+  .tree.hidden { transform: scaleY(0); opacity: 0; }
+  .tree.dead .tree-top { border-bottom-color: #8a7240 !important; }
+  .tree.dead .tree-top::before { border-bottom-color: #7a6030 !important; }
+
+  .tree-trunk {
+    width: 14px; height: 36px;
+    background: #7a5230;
+    border-radius: 3px;
+  }
+  .tree.dead .tree-trunk { background: #5a3a18; }
+
+  .tree-top {
+    width: 0; height: 0;
+    border-left: 30px solid transparent;
+    border-right: 30px solid transparent;
+    border-bottom: 55px solid #2e8b2e;
+    position: relative;
+    transition: border-bottom-color 2s;
+  }
+  .tree-top::before {
+    content: '';
+    position: absolute;
+    top: 20px; left: -25px;
+    width: 0; height: 0;
+    border-left: 25px solid transparent;
+    border-right: 25px solid transparent;
+    border-bottom: 50px solid #3aaa3a;
+    transition: border-bottom-color 2s;
+  }
+
+  .flower {
+    position: absolute;
+    bottom: calc(44% + 8px);
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    transition: opacity 1.2s, transform 1.2s cubic-bezier(0.34,1.56,0.64,1);
+    transform-origin: bottom center;
+    transform: scaleY(1);
+    opacity: 1;
+  }
+  .flower.hidden { opacity: 0; transform: scaleY(0); }
+
+  /* BINS */
+  #bins-area {
+    position: absolute;
+    bottom: 44%;
+    left: 0; width: 100%;
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    padding-bottom: 0;
+    z-index: 10;
+    align-items: flex-end;
+  }
+
+  .bin {
+    width: 100px;
+    height: 115px;
+    border-radius: 6px 6px 10px 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    cursor: default;
+    position: relative;
+    border: 3px solid rgba(0,0,0,0.25);
+    transition: transform 0.2s, box-shadow 0.2s;
+    box-shadow: inset 0 -6px 0 rgba(0,0,0,0.2);
+    padding-top: 18px;
+  }
+  .bin:hover { transform: translateY(-4px); box-shadow: 0 8px 20px rgba(0,0,0,0.3), inset 0 -6px 0 rgba(0,0,0,0.2); }
+  .bin.drag-over { transform: scale(1.08) translateY(-6px); box-shadow: 0 0 0 4px #fff, 0 8px 30px rgba(0,0,0,0.4), inset 0 -6px 0 rgba(0,0,0,0.2); }
+  .bin.correct-flash { animation: correctFlash 0.5s ease; }
+  .bin.wrong-flash { animation: wrongFlash 0.5s ease; }
+
+  @keyframes correctFlash { 0%,100%{} 50%{box-shadow:0 0 0 6px #4cff6e,0 0 30px #4cff6e;} }
+  @keyframes wrongFlash { 0%,100%{} 50%{box-shadow:0 0 0 6px #ff4444,0 0 30px #ff4444;} }
+
+  .bin-label {
+    font-size: 11px;
+    font-weight: 800;
+    color: #ffffff;
+    text-align: center;
+    line-height: 1.25;
+    padding: 6px 8px;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.7);
+    margin-top: 6px;
+    border-radius: 10px;
+    background: rgba(0,0,0,0.28);
+    letter-spacing: 0.03em;
+  }
+  .bin-icon {
+    font-size: 28px;
+    margin-bottom: 4px;
+    filter: drop-shadow(0 2px 3px rgba(0,0,0,0.35));
+  }
+
+  .bin-lid {
+    position: absolute;
+    top: -14px; left: -6px;
+    width: 108px; height: 18px;
+    border-radius: 4px;
+    border: 3px solid rgba(0,0,0,0.25);
+  }
+
+  #bin-gray { background: linear-gradient(160deg, #b0b0b0, #888); }
+  #bin-gray .bin-lid { background: #999; }
+  #bin-green { background: linear-gradient(160deg, #3aaa3a, #267a26); }
+  #bin-green .bin-lid { background: #2e8a2e; }
+  #bin-black { background: linear-gradient(160deg, #444, #222); }
+  #bin-black .bin-lid { background: #333; }
+
+  /* WASTE ITEMS ON GROUND */
+  #waste-ground {
+    position: absolute;
+    bottom: calc(44% - 92px);
+    left: 0; width: 100%;
+    height: 120px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    z-index: 20;
+    flex-wrap: wrap;
+    padding: 0 60px;
+  }
+
+  .waste-item {
+    width: 72px; height: 72px;
+    background: linear-gradient(180deg, rgba(11,29,18,0.88), rgba(28,58,36,0.88));
+    border: 2px solid rgba(255,255,255,0.2);
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: grab;
+    font-size: 28px;
+    transition: transform 0.15s, box-shadow 0.15s;
+    position: relative;
+    z-index: 30;
+    backdrop-filter: blur(4px);
+    box-shadow: 0 10px 24px rgba(0,0,0,0.28);
+  }
+  .waste-item:hover { transform: scale(1.1) translateY(-3px); box-shadow: 0 8px 20px rgba(0,0,0,0.4); }
+  .waste-item:active { cursor: grabbing; }
+  .waste-item.dragging { opacity: 0.3; transform: scale(0.9); }
+
+  .waste-name {
+    font-size: 10px;
+    color: #ffffff;
+    font-weight: 800;
+    text-align: center;
+    margin-top: 4px;
+    line-height: 1.15;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.95);
+    max-width: 60px;
+  }
+
+  /* DRAG GHOST */
+  #drag-ghost {
+    position: fixed;
+    pointer-events: none;
+    z-index: 9999;
+    font-size: 38px;
+    transform: translate(-50%, -50%);
+    display: none;
+    filter: drop-shadow(0 6px 12px rgba(0,0,0,0.5));
+    transition: none;
+  }
+
+  /* SCORE & HUD */
+  #hud {
+    position: absolute;
+    top: 16px; left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 14px;
+    z-index: 100;
+    align-items: center;
+  }
+
+  .hud-card {
+    background: rgba(0,0,0,0.45);
+    backdrop-filter: blur(8px);
+    border: 1.5px solid rgba(255,255,255,0.2);
+    border-radius: 20px;
+    padding: 6px 16px;
+    color: white;
+    font-size: 14px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .hud-icon { font-size: 16px; }
+
+  /* TOAST FEEDBACK */
+  #toast {
+    position: absolute;
+    top: 70px; left: 50%;
+    transform: translateX(-50%) translateY(-10px);
+    background: rgba(0,0,0,0.8);
+    color: white;
+    padding: 10px 22px;
+    border-radius: 30px;
+    font-size: 15px;
+    font-weight: 700;
+    opacity: 0;
+    transition: opacity 0.3s, transform 0.3s;
+    z-index: 200;
+    pointer-events: none;
+    text-align: center;
+    max-width: 320px;
+  }
+  #toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+  #toast.good { border: 2px solid #4cff6e; color: #4cff6e; }
+  #toast.bad { border: 2px solid #ff6644; color: #ff6644; }
+
+  /* BIRDS */
+  .bird {
+    position: absolute;
+    font-size: 18px;
+    transition: opacity 2s;
+    pointer-events: none;
+    animation: flyBird linear infinite;
+  }
+  .bird.hidden { opacity: 0; }
+  @keyframes flyBird {
+    0% { transform: translateX(0) translateY(0); }
+    25% { transform: translateX(40px) translateY(-12px); }
+    50% { transform: translateX(80px) translateY(0); }
+    75% { transform: translateX(120px) translateY(-8px); }
+    100% { transform: translateX(160px) translateY(0); }
+  }
+
+  /* SMOG particles */
+  .smog {
+    position: absolute;
+    border-radius: 50%;
+    background: rgba(100,80,50,0.18);
+    pointer-events: none;
+    animation: smogFloat linear infinite;
+    opacity: 0;
+    transition: opacity 2s;
+  }
+  .smog.show { opacity: 1; }
+  @keyframes smogFloat {
+    0% { transform: translateY(0) scale(1); }
+    100% { transform: translateY(-120px) scale(2.5); opacity: 0; }
+  }
+
+  /* TITLE */
+  #title-bar {
+    position: absolute;
+    bottom: calc(44% + 140px);
+    left: 50%; transform: translateX(-50%);
+    text-align: center;
+    color: white;
+    pointer-events: none;
+    z-index: 5;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+  }
+  #title-bar h1 {
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    background: rgba(0,0,0,0.26);
+    padding: 8px 16px;
+    border-radius: 999px;
+  }
+  #title-bar p {
+    font-size: 14px;
+    opacity: 1;
+    margin-top: 10px;
+    background: rgba(0,0,0,0.22);
+    padding: 6px 12px;
+    border-radius: 999px;
+    display: inline-block;
+  }
+
+  /* RESTART */
+  #end-screen {
+    display: none;
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(8px);
+    z-index: 300;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 18px;
+  }
+  #end-screen.show { display: flex; }
+  #end-screen h2 { font-size: 32px; color: white; font-weight: 800; text-align: center; }
+  #end-screen p { font-size: 16px; color: rgba(255,255,255,0.8); text-align: center; max-width: 340px; }
+  #end-screen .score-big { font-size: 54px; font-weight: 800; }
+  .btn-restart {
+    padding: 14px 36px;
+    border-radius: 50px;
+    border: none;
+    background: #4caa3a;
+    color: white;
+    font-size: 17px;
+    font-weight: 800;
+    cursor: pointer;
+    font-family: 'Nunito', sans-serif;
+    transition: transform 0.15s, background 0.15s;
+  }
+  .btn-restart:hover { background: #3a8a2a; transform: scale(1.05); }
+
+  /* RESPONSIVE */
+  @media (max-width: 600px) {
+    .bin { width: 88px; height: 110px; }
+    .bin-lid { width: 88px; }
+    #bins-area { gap: 12px; }
+    .waste-item { width: 62px; height: 62px; font-size: 22px; }
+    #waste-ground {
+      gap: 10px;
+      padding: 0 28px;
+      bottom: calc(44% - 88px);
+      height: 110px;
+    }
+    .bin-label { font-size: 9px; padding: 5px 6px; }
+    .waste-name { font-size: 9px; max-width: 52px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="scene">
+  <!-- Sky & Atmosphere -->
+  <div id="sky">
+    <div id="sun"></div>
+    <!-- Birds (shown when env is healthy) -->
+    <div class="bird" style="top:18%;left:15%;animation-duration:14s;">🐦</div>
+    <div class="bird" style="top:25%;left:30%;animation-duration:18s;animation-delay:-5s;">🐦</div>
+    <div class="bird" style="top:12%;left:55%;animation-duration:22s;animation-delay:-10s;">🐦</div>
+    <!-- Smog -->
+    <div class="smog" id="smog1" style="width:120px;height:80px;top:10%;left:20%;animation-duration:8s;"></div>
+    <div class="smog" id="smog2" style="width:90px;height:60px;top:18%;left:50%;animation-duration:11s;animation-delay:-3s;"></div>
+    <div class="smog" id="smog3" style="width:150px;height:100px;top:8%;right:15%;animation-duration:9s;animation-delay:-5s;"></div>
+  </div>
+
+  <!-- Title -->
+  <div id="title-bar">
+    <h1>🌿 Segrega tus residuos</h1>
+    <p>Arrastra cada residuo al contenedor correcto</p>
+  </div>
+
+  <!-- Trees -->
+  <div id="trees">
+    <div class="tree" id="tree1"><div class="tree-top"></div><div class="tree-trunk"></div></div>
+    <div class="tree" id="tree2"><div class="tree-top"></div><div class="tree-trunk"></div></div>
+    <div class="tree" id="tree3"><div class="tree-top"></div><div class="tree-trunk"></div></div>
+    <div class="tree" id="tree4"><div class="tree-top"></div><div class="tree-trunk"></div></div>
+    <div class="tree" id="tree5"><div class="tree-top"></div><div class="tree-trunk"></div></div>
+  </div>
+
+  <!-- Flowers -->
+  <div class="flower" id="f1" style="left:8%;background:#FF8C00;"></div>
+  <div class="flower" id="f2" style="left:16%;background:#FF4499;"></div>
+  <div class="flower" id="f3" style="left:72%;background:#FFDD00;"></div>
+  <div class="flower" id="f4" style="left:82%;background:#FF6699;"></div>
+  <div class="flower" id="f5" style="left:88%;background:#FF8C00;"></div>
+
+  <!-- Ground -->
+  <div id="grass-line"></div>
+  <div id="ground"></div>
+
+  <!-- Bins -->
+  <div id="bins-area">
+    <div class="bin" id="bin-gray" data-type="aprovechable">
+      <div class="bin-lid"></div>
+      <div class="bin-icon">♻️</div>
+      <div class="bin-label">RESIDUOS<br>APROVECHABLES</div>
+    </div>
+    <div class="bin" id="bin-green" data-type="organico">
+      <div class="bin-lid"></div>
+      <div class="bin-icon">🌱</div>
+      <div class="bin-label">ORGÁNICOS<br>APROVECHABLES</div>
+    </div>
+    <div class="bin" id="bin-black" data-type="no-aprovechable">
+      <div class="bin-lid"></div>
+      <div class="bin-icon">🚫</div>
+      <div class="bin-label">NO<br>APROVECHABLES</div>
+    </div>
+  </div>
+
+  <!-- Waste Items on Ground -->
+  <div id="waste-ground"></div>
+
+  <!-- HUD -->
+  <div id="hud">
+    <div class="hud-card"><span class="hud-icon">✅</span> <span id="score-correct">0</span> correctos</div>
+    <div class="hud-card"><span class="hud-icon">❌</span> <span id="score-wrong">0</span> errores</div>
+    <div class="hud-card"><span class="hud-icon">🌿</span> Salud: <span id="env-bar">100%</span></div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast"></div>
+
+  <!-- Drag ghost -->
+  <div id="drag-ghost"></div>
+
+  <!-- End screen -->
+  <div id="end-screen">
+    <div id="end-emoji" style="font-size:64px;">🌍</div>
+    <h2 id="end-title">¡Ronda completada!</h2>
+    <div class="score-big" id="end-score">0/10</div>
+    <p id="end-msg"></p>
+    <button class="btn-restart" onclick="initGame()">🔄 Jugar de nuevo</button>
+  </div>
+</div>
+
+<script>
+const wasteData = [
+  { emoji:'🍶', name:'Plástico', type:'aprovechable', msg:'¡Correcto! El plástico va al contenedor gris (aprovechable).' },
+  { emoji:'📦', name:'Cartón', type:'aprovechable', msg:'¡Bien! El cartón es reciclable.' },
+  { emoji:'🍾', name:'Vidrio', type:'aprovechable', msg:'¡Excelente! El vidrio va al contenedor gris.' },
+  { emoji:'📰', name:'Papel', type:'aprovechable', msg:'¡Correcto! El papel es aprovechable.' },
+  { emoji:'🔩', name:'Metal', type:'aprovechable', msg:'¡Bien! Los metales son reciclables.' },
+  { emoji:'🍌', name:'Cáscara', type:'organico', msg:'¡Perfecto! Los restos de comida van al contenedor verde.' },
+  { emoji:'🥦', name:'Restos comida', type:'organico', msg:'¡Correcto! La materia orgánica al contenedor verde.' },
+  { emoji:'🌾', name:'Deshecho agrícola', type:'organico', msg:'¡Bien! Los desechos agrícolas son orgánicos.' },
+  { emoji:'🧻', name:'Papel higiénico', type:'no-aprovechable', msg:'¡Correcto! El papel higiénico no es reciclable.' },
+  { emoji:'🍟', name:'Papel con comida', type:'no-aprovechable', msg:'¡Bien! El papel contaminado va al contenedor negro.' },
+  { emoji:'💿', name:'Papel metalizado', type:'no-aprovechable', msg:'¡Correcto! Los papeles metalizados no son aprovechables.' },
+  { emoji:'🧴', name:'Servilleta usada', type:'no-aprovechable', msg:'¡Correcto! Las servilletas usadas al contenedor negro.' },
+];
+
+let correctCount = 0;
+let wrongCount = 0;
+let envHealth = 100;
+let totalItems = 0;
+let placedItems = 0;
+let dragItem = null;
+let dragGhost = document.getElementById('drag-ghost');
+let currentBatch = [];
+
+const BATCH_SIZE = 6;
+const TREES = ['tree1','tree2','tree3','tree4','tree5'];
+const FLOWERS = ['f1','f2','f3','f4','f5'];
+
+function shuffle(arr) {
+  return [...arr].sort(() => Math.random() - 0.5);
+}
+
+function initGame() {
+  correctCount = 0; wrongCount = 0; envHealth = 30; placedItems = 0;
+  // Reset all trees/flowers to hidden so growth is visible from start
+  document.querySelectorAll('.tree').forEach(t => { t.classList.add('hidden'); t.classList.remove('dead'); });
+  document.querySelectorAll('.flower').forEach(f => f.classList.add('hidden'));
+  document.getElementById('sky').classList.remove('polluted');
+  document.getElementById('ground').classList.remove('dead');
+  document.getElementById('grass-line').classList.remove('dead');
+  document.querySelectorAll('.smog').forEach(s => s.classList.remove('show'));
+  document.querySelectorAll('.bird').forEach(b => b.classList.add('hidden'));
+  updateHUD();
+  document.getElementById('end-screen').classList.remove('show');
+  spawnBatch();
+}
+
+function spawnBatch() {
+  const ground = document.getElementById('waste-ground');
+  ground.innerHTML = '';
+  currentBatch = shuffle(wasteData).slice(0, BATCH_SIZE);
+  totalItems = currentBatch.length;
+  placedItems = 0;
+
+  currentBatch.forEach((item, i) => {
+    const el = document.createElement('div');
+    el.className = 'waste-item';
+    el.dataset.type = item.type;
+    el.dataset.idx = i;
+    el.innerHTML = `<span>${item.emoji}</span><div class="waste-name">${item.name}</div>`;
+    el.draggable = true;
+
+    el.addEventListener('dragstart', e => {
+      dragItem = el;
+      el.classList.add('dragging');
+      dragGhost.textContent = item.emoji;
+      dragGhost.style.display = 'block';
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setDragImage(new Image(), 0, 0);
+    });
+
+    el.addEventListener('dragend', () => {
+      el.classList.remove('dragging');
+      dragGhost.style.display = 'none';
+      dragItem = null;
+    });
+
+    // Touch support
+    let touchStartX, touchStartY;
+    el.addEventListener('touchstart', e => {
+      const touch = e.touches[0];
+      touchStartX = touch.clientX; touchStartY = touch.clientY;
+      dragItem = el;
+      dragGhost.style.display = 'block';
+      dragGhost.textContent = item.emoji;
+    }, { passive: true });
+
+    el.addEventListener('touchmove', e => {
+      e.preventDefault();
+      const touch = e.touches[0];
+      dragGhost.style.left = touch.clientX + 'px';
+      dragGhost.style.top = touch.clientY + 'px';
+    }, { passive: false });
+
+    el.addEventListener('touchend', e => {
+      dragGhost.style.display = 'none';
+      const touch = e.changedTouches[0];
+      const target = document.elementFromPoint(touch.clientX, touch.clientY);
+      const bin = target ? target.closest('.bin') : null;
+      if (bin && dragItem) {
+        handleDrop(bin, dragItem);
+      }
+      dragItem = null;
+    });
+
+    ground.appendChild(el);
+  });
+}
+
+document.querySelectorAll('.bin').forEach(bin => {
+  bin.addEventListener('dragover', e => {
+    e.preventDefault();
+    bin.classList.add('drag-over');
+  });
+  bin.addEventListener('dragleave', () => {
+    bin.classList.remove('drag-over');
+  });
+  bin.addEventListener('drop', e => {
+    e.preventDefault();
+    bin.classList.remove('drag-over');
+    if (dragItem) handleDrop(bin, dragItem);
+  });
+});
+
+document.addEventListener('dragover', e => {
+  dragGhost.style.left = e.clientX + 'px';
+  dragGhost.style.top = e.clientY + 'px';
+});
+
+function handleDrop(bin, item) {
+  const binType = bin.dataset.type;
+  const itemType = item.dataset.type;
+  const idx = parseInt(item.dataset.idx);
+  const data = currentBatch[idx];
+
+  if (binType === itemType) {
+    // Correct!
+    correctCount++;
+    envHealth = Math.min(100, envHealth + 14);
+    bin.classList.add('correct-flash');
+    showToast('✅ ' + data.msg, 'good');
+    item.style.transition = 'transform 0.4s, opacity 0.4s';
+    item.style.transform = 'scale(0) rotate(20deg)';
+    item.style.opacity = '0';
+    setTimeout(() => item.remove(), 400);
+  } else {
+    // Wrong!
+    wrongCount++;
+    envHealth = Math.max(0, envHealth - 12);
+    bin.classList.add('wrong-flash');
+    const correctBinNames = { aprovechable: '♻️ Gris', organico: '🌱 Verde', 'no-aprovechable': '🚫 Negro' };
+    showToast(`❌ ¡Incorrecto! Va en el contenedor ${correctBinNames[itemType]}`, 'bad');
+    item.style.transition = 'transform 0.3s';
+    item.style.transform = 'translateX(-8px)';
+    setTimeout(() => { item.style.transform = 'translateX(8px)'; }, 150);
+    setTimeout(() => { item.style.transform = ''; }, 300);
+  }
+
+  setTimeout(() => bin.classList.remove('correct-flash','wrong-flash'), 600);
+  updateHUD();
+  updateEnvironment();
+  placedItems++;
+
+  const remaining = document.querySelectorAll('.waste-item').length - (binType === itemType ? 1 : 0);
+  if (remaining <= 0) {
+    setTimeout(() => {
+      if (placedItems >= totalItems) showEndScreen();
+    }, 500);
+  }
+}
+
+function updateHUD() {
+  document.getElementById('score-correct').textContent = correctCount;
+  document.getElementById('score-wrong').textContent = wrongCount;
+  document.getElementById('env-bar').textContent = Math.round(envHealth) + '%';
+}
+
+function updateEnvironment() {
+  const h = envHealth;
+  const sky = document.getElementById('sky');
+  const ground = document.getElementById('ground');
+  const grassLine = document.getElementById('grass-line');
+  const birds = document.querySelectorAll('.bird');
+  const smogs = document.querySelectorAll('.smog');
+
+  if (h >= 70) {
+    // Healthy
+    sky.classList.remove('polluted');
+    ground.classList.remove('dead');
+    grassLine.classList.remove('dead');
+    birds.forEach(b => b.classList.remove('hidden'));
+    smogs.forEach(s => s.classList.remove('show'));
+    growTrees(Math.round((h / 100) * 5));
+    growFlowers(true);
+  } else if (h >= 40) {
+    sky.classList.remove('polluted');
+    ground.classList.remove('dead');
+    birds.forEach(b => b.classList.add('hidden'));
+    smogs.forEach((s, i) => { if (i === 0) s.classList.add('show'); });
+    growTrees(Math.round((h / 100) * 5));
+    growFlowers(h > 55);
+  } else {
+    // Dying
+    sky.classList.add('polluted');
+    ground.classList.add('dead');
+    grassLine.classList.add('dead');
+    birds.forEach(b => b.classList.add('hidden'));
+    smogs.forEach(s => s.classList.add('show'));
+    growTrees(Math.max(0, Math.round((h / 100) * 5)));
+    growFlowers(false);
+    // Kill trees
+    TREES.forEach((id, i) => {
+      const t = document.getElementById(id);
+      if (i >= Math.round((h / 100) * 5)) {
+        t.classList.add('dead');
+      }
+    });
+  }
+}
+
+function growTrees(count) {
+  TREES.forEach((id, i) => {
+    const t = document.getElementById(id);
+    if (i < count) {
+      // Stagger each tree reveal slightly
+      setTimeout(() => {
+        t.classList.remove('hidden');
+        t.classList.remove('dead');
+      }, i * 120);
+    } else {
+      t.classList.add('hidden');
+    }
+  });
+}
+
+function growFlowers(show) {
+  FLOWERS.forEach((id, i) => {
+    const f = document.getElementById(id);
+    setTimeout(() => {
+      if (show) f.classList.remove('hidden');
+      else f.classList.add('hidden');
+    }, i * 80);
+  });
+}
+
+function showToast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'show ' + type;
+  clearTimeout(window._toastTimer);
+  window._toastTimer = setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function showEndScreen() {
+  const total = correctCount + wrongCount;
+  const pct = total > 0 ? Math.round((correctCount / total) * 100) : 0;
+  const end = document.getElementById('end-screen');
+  document.getElementById('end-score').textContent = correctCount + '/' + total;
+  document.getElementById('end-score').style.color = pct >= 70 ? '#4cff6e' : '#ff6644';
+
+  if (pct >= 80) {
+    document.getElementById('end-emoji').textContent = '🌳🌿🌍';
+    document.getElementById('end-title').textContent = '¡Planeta protegido!';
+    document.getElementById('end-msg').textContent = 'Excelente segregación. Tus acciones ayudan a conservar los ecosistemas y reducir la contaminación.';
+  } else if (pct >= 50) {
+    document.getElementById('end-emoji').textContent = '🌱';
+    document.getElementById('end-title').textContent = '¡Buen intento!';
+    document.getElementById('end-msg').textContent = 'Vas por buen camino. Recuerda: orgánicos al verde, reciclables al gris y no aprovechables al negro.';
+  } else {
+    document.getElementById('end-emoji').textContent = '🌫️';
+    document.getElementById('end-title').textContent = 'El planeta necesita tu ayuda';
+    document.getElementById('end-msg').textContent = 'La segregación incorrecta contamina el ambiente. ¡Practica más para proteger la naturaleza!';
+  }
+
+  end.classList.add('show');
+}
+
+// Init: all trees/flowers hidden, then initGame shows them
+document.querySelectorAll('.tree').forEach(t => t.classList.add('hidden'));
+document.querySelectorAll('.flower').forEach(f => f.classList.add('hidden'));
+initGame();
+</script>
+</body>
+</html>

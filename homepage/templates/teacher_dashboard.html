@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Docente | Ecovigilante</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Sora:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+</head>
+<body>
+  <main class="users-page dashboard-page">
+    <div class="page-tools">
+      <a href="{{ url_for('home') }}" class="tool-link">Inicio</a>
+      <a href="{{ url_for('teacher_dashboard') }}" class="tool-link active">Docente</a>
+      <a href="{{ url_for('profile') }}" class="tool-link">Perfil</a>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <section class="section flash-section narrow-section">
+          <div class="flash-stack">
+            {% for category, message in messages %}
+              <div class="flash-message {{ category }}">{{ message }}</div>
+            {% endfor %}
+          </div>
+        </section>
+      {% endif %}
+    {% endwith %}
+
+    <section class="section narrow-section">
+      <div class="dashboard-hero">
+        <div class="dashboard-title">
+          <span class="section-tag">Panel docente</span>
+          <h1 class="page-title">{{ user.nombres }} {{ user.apellidos }}</h1>
+          <p>
+            Crea una clase por cada materia, comparte su QR o codigo y revisa que estudiantes
+            quedaron inscritos en cada grupo.
+          </p>
+        </div>
+        <div class="dashboard-username-card">
+          <span class="dashboard-mini-label">Tipo de usuario</span>
+          <strong>{{ user.tipo_usuario or 'Docente' }}</strong>
+          <p>{{ user.usuario }}</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section narrow-section">
+      <div class="dashboard-metrics">
+        <article class="metric-panel">
+          <span class="metric-panel-label">Materias creadas</span>
+          <strong>{{ teacher_classes|length }}</strong>
+          <p>Cada materia tiene su propio codigo y QR.</p>
+        </article>
+        <article class="metric-panel">
+          <span class="metric-panel-label">Estudiantes inscritos</span>
+          <strong>{{ total_students }}</strong>
+          <p>Total de inscripciones en tus clases.</p>
+        </article>
+        <article class="metric-panel metric-panel-alert">
+          <span class="metric-panel-label">Inscripcion</span>
+          <strong>QR</strong>
+          <p>Los estudiantes también pueden ingresar el código manual.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section narrow-section">
+      <div class="dashboard-grid">
+        <article class="card dashboard-card">
+          <span class="section-tag">Nueva clase</span>
+          <h3>Crear materia</h3>
+          <p>Agrega una materia o grupo para generar automáticamente su código y QR de inscripción.</p>
+          <form method="post" action="{{ url_for('create_teacher_class_route') }}" class="auth-form compact-form" autocomplete="off">
+            <label for="nombre_clase">Nombre de la materia o clase</label>
+            <input
+              type="text"
+              id="nombre_clase"
+              name="nombre_clase"
+              placeholder="Ejemplo: Gestion ambiental"
+              required
+            >
+            <button type="submit" class="button primary auth-submit">Crear clase</button>
+          </form>
+        </article>
+
+        <article class="card dashboard-card">
+          <span class="section-tag">Perfil</span>
+          <h3>Datos y seguridad</h3>
+          <p>Actualiza tus datos personales, contacto, foto de perfil, archivo de recuperación y cierre de sesión desde tu perfil.</p>
+          <div class="hero-actions">
+            <a href="{{ url_for('profile') }}" class="button primary">Ir a perfil</a>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section narrow-section">
+      <div class="section-heading">
+        <span class="section-tag">Mis materias</span>
+        <h2>Clases creadas</h2>
+      </div>
+
+      {% if teacher_classes %}
+        <div class="teacher-class-list">
+          {% for item in teacher_classes %}
+            <article class="card teacher-class-card">
+              <div class="teacher-class-header">
+                <div>
+                  <span class="section-tag">{{ item.codigo }}</span>
+                  <h3>{{ item.nombre }}</h3>
+                  <p>{{ item.total_estudiantes }} estudiantes inscritos</p>
+                </div>
+                <img
+                  src="{{ url_for('class_qr', class_code=item.codigo) }}"
+                  alt="QR para inscribirse a la clase {{ item.codigo }}"
+                  class="class-qr compact-qr"
+                >
+              </div>
+
+              <div class="class-code-row">
+                <div>
+                  <span>Codigo de clase</span>
+                  <strong>{{ item.codigo }}</strong>
+                </div>
+                <div>
+                  <span>Enlace</span>
+                  <strong>{{ item.enrollment_url }}</strong>
+                </div>
+              </div>
+
+              <div class="class-actions">
+                <a href="{{ url_for('teacher_class_pdf', class_id=item.id_clase) }}" class="button primary" style="font-size:0.85rem;padding:6px 14px;">
+                  Descargar PDF
+                </a>
+              </div>
+
+              {% if item.students %}
+                <div class="table-shell compact-table-shell">
+                  <table class="users-table compact-users-table">
+                    <thead>
+                      <tr>
+                        <th>Estudiante</th>
+                        <th>Usuario</th>
+                        <th>Correo</th>
+                        <th>Ecopuntos</th>
+                        <th>Ecomultas</th>
+                        <th>Saldo</th>
+                        <th>% Aciertos</th>
+                        <th>Fecha inscripcion</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for student in item.students %}
+                        <tr>
+                          <td>{{ student.nombres }} {{ student.apellidos }}</td>
+                          <td>{{ student.usuario }}</td>
+                          <td>{{ student.correo }}</td>
+                          <td>{{ student.ecopuntos }}</td>
+                          <td>{{ student.ecomultas }}</td>
+                          <td>{{ student.saldo_ambiental }}</td>
+                          <td>
+                            {% if student.clasificaciones_total > 0 %}
+                              <span style="font-weight:700;color:{% if student.porcentaje_aciertos >= 70 %}#16a34a{% elif student.porcentaje_aciertos >= 40 %}#ca8a04{% else %}#dc2626{% endif %}">
+                                {{ student.porcentaje_aciertos }}%
+                              </span>
+                              <span style="font-size:11px;color:#9ca3af">({{ student.clasificaciones_correctas }}/{{ student.clasificaciones_total }})</span>
+                            {% else %}
+                              <span style="color:#9ca3af">--</span>
+                            {% endif %}
+                          </td>
+                          <td>{{ student.fecha_inscripcion }}</td>
+                        </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              {% else %}
+                <div class="empty-class-note">
+                  Comparte el QR o el codigo para recibir estudiantes en esta materia.
+                </div>
+              {% endif %}
+            </article>
+          {% endfor %}
+        </div>
+      {% else %}
+        <article class="card status-card">
+          <h3>Aun no tienes clases</h3>
+          <p>Crea tu primera materia para generar el QR y el codigo de inscripcion.</p>
+        </article>
+      {% endif %}
+    </section>
+  </main>
+</body>
+</html>

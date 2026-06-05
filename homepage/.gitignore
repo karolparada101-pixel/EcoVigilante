@@ -1,0 +1,10 @@
+.env
+__pycache__/
+*.pyc
+.ultralytics/
+.matplotlib/
+static/camera/uploads/
+static/face_dataset/*
+!static/face_dataset/.gitkeep
+# Modelo YOLO (~50MB, supera límite 25MB de GitHub)
+yolov8m.pt

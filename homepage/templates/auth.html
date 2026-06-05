@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>
+    {% if mode == 'login' %}
+      Iniciar sesión
+    {% elif mode == 'register' %}
+      Registrarse
+    {% elif mode == 'two_factor' %}
+      Verificacion
+    {% else %}
+      Recuperar contraseña
+    {% endif %} | Ecovigilante
+  </title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Sora:wght@400;600;700;800&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+</head>
+
+<body class="auth-page">
+
+  <main class="auth-layout">
+
+    <div class="page-tools auth-tools">
+      
+    </div>
+
+    <a href="{{ url_for('home') }}" class="back-link">
+      Volver a la home
+    </a>
+
+    <section class="auth-card">
+
+      <span class="section-tag">
+        {% if mode == 'login' %}
+          Acceso
+        {% elif mode == 'register' %}
+          Registro
+        {% elif mode == 'two_factor' %}
+          Verificación
+        {% else %}
+          Seguridad
+        {% endif %}
+      </span>
+
+      <h1>
+        {% if mode == 'login' %}
+          Iniciar sesión
+        {% elif mode == 'register' %}
+          Crear usuario
+        {% elif mode == 'two_factor' %}
+          Verificación en dos pasos
+        {% elif mode == 'verify_password_reset' %}
+          Crear nueva contraseña
+        {% elif mode == 'recover_with_file' %}
+          Recuperar con archivo
+        {% else %}
+          Recuperar contraseña
+        {% endif %}
+      </h1>
+
+      <p>
+        {% if mode == 'login' %}
+          Ingresa con tu correo y contraseña. Luego enviaremos un código para confirmar tu acceso.
+        {% elif mode == 'register' %}
+          Completa tu información personal para crear tu usuario en Ecovigilante. El nombre de usuario se genera automáticamente.
+        {% elif mode == 'two_factor' %}
+          Escribe el código enviado a tu correo para completar el inicio de sesión.
+        {% elif mode == 'verify_password_reset' %}
+          Escribe el código recibido y define una nueva contraseña.
+        {% elif mode == 'recover_with_file' %}
+          Adjunta tu archivo de recuperación para validar tu identidad y cambiar la contraseña.
+        {% else %}
+          Ingresa tu correo para recibir un código de recuperación.
+        {% endif %}
+      </p>
+
+      {% if options_error %}
+        <div class="flash-stack">
+          <div class="flash-message error">
+            {{ options_error }}
+          </div>
+        </div>
+      {% endif %}
+
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div class="flash-stack">
+            {% for category, message in messages %}
+              <div class="flash-message {{ category }}">
+                {{ message }}
+              </div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
+
+      <!-- FORMULARIO -->
+      <form method="post" class="auth-form" autocomplete="off" enctype="multipart/form-data">
+
+        {% if mode == 'register' %}
+
+          <div class="auth-grid">
+
+            <div>
+              <label for="nombres">Nombres</label>
+              <input
+                type="text"
+                id="nombres"
+                name="nombres"
+                pattern="[A-Za-záéíóúÁÉÍÓÚñÑ ]+"
+                title="Solo letras"
+                autocomplete="off"
+                required
+              >
+              <span class="field-error" id="error-nombres"></span>
+            </div>
+
+            <div>
+              <label for="apellidos">Apellidos</label>
+              <input
+                type="text"
+                id="apellidos"
+                name="apellidos"
+                pattern="[A-Za-záéíóúÁÉÍÓÚñÑ ]+"
+                title="Solo letras"
+                autocomplete="off"
+                required
+              >
+              <span class="field-error" id="error-apellidos"></span>
+            </div>
+
+            <div>
+              <label for="id_tipo_documento">
+                Tipo de documento
+              </label>
+              <select
+                id="id_tipo_documento"
+                name="id_tipo_documento"
+                autocomplete="off"
+                required
+              >
+                <option value="">
+                  Selecciona una opción
+                </option>
+                {% for item in document_types %}
+                  <option value="{{ item.id }}">
+                    {{ item.descripcion }}
+                  </option>
+                {% endfor %}
+              </select>
+              <span class="field-error" id="error-id_tipo_documento"></span>
+            </div>
+
+            <div>
+              <label for="numero_documento">
+                Número de documento
+              </label>
+              <input
+                type="text"
+                id="numero_documento"
+                name="numero_documento"
+                pattern="[0-9]+"
+                title="Solo números"
+                autocomplete="off"
+                required
+              >
+              <span class="field-error" id="error-numero_documento"></span>
+            </div>
+
+            <div>
+              <label for="id_tipo_genero">
+                Género
+              </label>
+              <select
+                id="id_tipo_genero"
+                name="id_tipo_genero"
+                autocomplete="off"
+                required
+              >
+                <option value="">
+                  Selecciona una opción
+                </option>
+                {% for item in gender_types %}
+                  <option value="{{ item.id }}">
+                    {{ item.descripcion }}
+                  </option>
+                {% endfor %}
+              </select>
+              <span class="field-error" id="error-id_tipo_genero"></span>
+            </div>
+
+            <div>
+              <label for="telefono">Teléfono</label>
+              <input
+                type="text"
+                id="telefono"
+                name="telefono"
+                pattern="[0-9]+"
+                title="Solo números"
+                autocomplete="off"
+                required
+              >
+              <span class="field-error" id="error-telefono"></span>
+            </div>
+
+            <div class="auth-grid-full">
+              <label for="correo">Correo</label>
+              <input
+                type="email"
+                id="correo"
+                name="correo"
+                autocomplete="off"
+                required
+              >
+              <span class="field-error" id="error-correo"></span>
+            </div>
+
+            <div class="auth-grid-full">
+              <label for="contrasena">Contraseña (8 a 12 caracteres)</label>
+              <input
+                type="password"
+                id="contrasena"
+                name="contrasena"
+                minlength="8"
+                maxlength="12"
+                autocomplete="new-password"
+                required
+              >
+              <span class="field-error" id="error-contrasena"></span>
+            </div>
+
+            <div class="auth-grid-full face-capture-field">
+              <label>Fotos de rostro para reconocimiento facial</label>
+
+              <div class="face-capture-box">
+                <div class="face-camera-preview">
+                  <video id="face-video" autoplay playsinline muted></video>
+                  <div class="face-placeholder" id="face-placeholder">
+                    Activa la cámara y toma varias fotos desde distintos ángulos para mejorar el reconocimiento.
+                  </div>
+                  <div class="face-guidance-overlay" id="face-guidance-overlay">
+                    <span id="face-guidance-text">Mira directamente a la cámara</span>
+                  </div>
+                </div>
+
+                <div class="face-thumbnails" id="face-thumbnails"></div>
+
+                <input type="hidden" id="foto_rostro_data" name="foto_rostro_data">
+
+                <div class="face-actions">
+                  <button type="button" class="button secondary face-action-btn" id="start-face-camera">
+                    Activar cámara
+                  </button>
+                  <button type="button" class="button primary face-action-btn" id="capture-face" disabled>
+                    Tomar foto
+                  </button>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+        {% elif mode == 'login' %}
+
+          <label for="correo">Correo</label>
+
+          <input
+            type="email"
+            id="correo"
+            name="correo"
+            autocomplete="off"
+            required
+          >
+
+          <label for="contrasena">Contraseña (8 a 12 caracteres)</label>
+
+          <input
+            type="password"
+            id="contrasena"
+            name="contrasena"
+            minlength="8"
+            maxlength="12"
+            autocomplete="new-password"
+            required
+          >
+
+        {% elif mode == 'forgot_password' %}
+
+          <label for="correo">Correo</label>
+
+          <input
+            type="email"
+            id="correo"
+            name="correo"
+            autocomplete="off"
+            required
+          >
+
+        {% elif mode == 'verify_password_reset' %}
+
+          <label for="codigo">Código de recuperación</label>
+
+          <input
+            type="text"
+            id="codigo"
+            name="codigo"
+            inputmode="numeric"
+            autocomplete="off"
+            required
+          >
+
+          <label for="contrasena">Nueva contraseña (8 a 12 caracteres)</label>
+
+          <input
+            type="password"
+            id="contrasena"
+            name="contrasena"
+            minlength="8"
+            maxlength="12"
+            autocomplete="new-password"
+            required
+          >
+
+          <label for="confirmar_contrasena">Confirmar contraseña</label>
+
+          <input
+            type="password"
+            id="confirmar_contrasena"
+            name="confirmar_contrasena"
+            minlength="8"
+            maxlength="12"
+            autocomplete="new-password"
+            required
+          >
+
+        {% elif mode == 'two_factor' %}
+
+          <label for="codigo">Código de verificación</label>
+
+          <input
+            type="text"
+            id="codigo"
+            name="codigo"
+            inputmode="numeric"
+            autocomplete="one-time-code"
+            required
+          >
+
+        {% elif mode == 'recover_with_file' %}
+
+          <label for="correo">Correo</label>
+
+          <input
+            type="email"
+            id="correo"
+            name="correo"
+            autocomplete="off"
+            required
+          >
+
+          <label for="archivo_recuperacion">Archivo de recuperación</label>
+
+          <input
+            type="file"
+            id="archivo_recuperacion"
+            name="archivo_recuperacion"
+            accept=".txt"
+            required
+          >
+
+          <label for="contrasena">Nueva contraseña (8 a 12 caracteres)</label>
+
+          <input
+            type="password"
+            id="contrasena"
+            name="contrasena"
+            minlength="8"
+            maxlength="12"
+            autocomplete="new-password"
+            required
+          >
+
+          <label for="confirmar_contrasena">Confirmar contraseña</label>
+
+          <input
+            type="password"
+            id="confirmar_contrasena"
+            name="confirmar_contrasena"
+            minlength="8"
+            maxlength="12"
+            autocomplete="new-password"
+            required
+          >
+
+        {% endif %}
+
+        {% if mode == 'register' %}
+          <div class="auth-grid-full terms-field">
+            <label class="terms-checkbox">
+              <input type="checkbox" id="terminos" name="terminos" required>
+              <span>Acepto los términos y condiciones</span>
+            </label>
+            <div class="terms-text">
+              <p>EcoVigilante es un proyecto desarrollado exclusivamente con fines académicos y educativos, sin ánimo de lucro. Su propósito es apoyar procesos de aprendizaje, investigación y demostración tecnológica relacionados con la gestión y clasificación de residuos electrónicos. El uso de esta plataforma implica la aceptación de los presentes términos y condiciones, entendiendo que la información, funcionalidades y resultados proporcionados tienen carácter académico y no constituyen servicios comerciales ni profesionales.</p>
+              <p>Los datos suministrados por los usuarios a través del servicio web serán tratados únicamente dentro de la plataforma EcoVigilante y utilizados exclusivamente para el funcionamiento de las funcionalidades del proyecto. La información registrada no será comercializada, cedida ni compartida con terceros ajenos al proyecto, salvo requerimiento legal aplicable. Asimismo, los datos permanecerán restringidos al entorno del servicio web y serán gestionados bajo criterios de confidencialidad, integridad y seguridad, de acuerdo con los objetivos académicos para los cuales fue desarrollado el sistema.</p>
+            </div>
+          </div>
+        {% endif %}
+
+        <button type="submit" class="button primary auth-submit">
+
+          {% if mode == 'login' %}
+            Entrar
+          {% elif mode == 'register' %}
+            Registrar usuario
+          {% elif mode == 'forgot_password' %}
+            Enviar codigo
+          {% elif mode == 'verify_password_reset' %}
+            Actualizar contraseña
+          {% elif mode == 'two_factor' %}
+            Verificar acceso
+          {% else %}
+            Recuperar con archivo
+          {% endif %}
+
+        </button>
+
+      </form>
+
+      <div class="auth-switch">
+
+        {% if mode == 'login' %}
+
+          ¿Aún no tienes registro?
+          <a href="{{ url_for('register') }}">
+            Crear usuario
+          </a>
+          <span class="auth-switch-separator">|</span>
+          <a href="{{ url_for('forgot_password') }}">
+            Olvidé mi contraseña
+          </a>
+          <span class="auth-switch-separator">|</span>
+          <a href="{{ url_for('recover_with_file') }}">
+            Usar archivo
+          </a>
+
+        {% elif mode == 'register' %}
+
+          ¿Ya estás registrado?
+          <a href="{{ url_for('login') }}">
+            Iniciar sesión
+          </a>
+
+        {% else %}
+
+          Ya tienes acceso?
+          <a href="{{ url_for('login') }}">
+            Iniciar sesión
+          </a>
+          {% if mode != 'recover_with_file' %}
+            <span class="auth-switch-separator">|</span>
+            <a href="{{ url_for('recover_with_file') }}">
+              Recuperar con archivo
+            </a>
+          {% endif %}
+
+        {% endif %}
+
+      </div>
+
+    </section>
+
+  </main>
+
+  {% if mode == 'register' %}
+    <style>
+      .face-thumbnails {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 8px 0;
+        min-height: 70px;
+      }
+      .face-thumbnails .thumb-wrap {
+        position: relative;
+        width: 64px;
+        height: 64px;
+        border-radius: 6px;
+        overflow: hidden;
+        border: 2px solid var(--gray-300);
+      }
+      .face-thumbnails .thumb-wrap img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+      .face-thumbnails .thumb-wrap .thumb-remove {
+        position: absolute;
+        top: -4px;
+        right: -4px;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        border: none;
+        background: #ef4444;
+        color: #fff;
+        font-size: 11px;
+        line-height: 18px;
+        text-align: center;
+        cursor: pointer;
+        padding: 0;
+      }
+      .terms-field {
+        margin-top: 16px;
+      }
+      .terms-checkbox {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        font-weight: 500;
+        cursor: pointer;
+      }
+      .terms-checkbox input[type="checkbox"] {
+        margin-top: 3px;
+        width: 18px;
+        height: 18px;
+        flex-shrink: 0;
+      }
+      .terms-text {
+        margin-top: 10px;
+        padding: 12px;
+        background: var(--gray-100);
+        border-radius: 8px;
+        font-size: 0.82rem;
+        line-height: 1.5;
+        color: var(--gray-600);
+        max-height: 180px;
+        overflow-y: auto;
+      }
+      .terms-text p {
+        margin: 0 0 8px;
+      }
+      .terms-text p:last-child {
+        margin-bottom: 0;
+      }
+      .field-error {
+        display: block;
+        min-height: 1.2em;
+        font-size: 0.78rem;
+        color: #ef4444;
+        margin-top: 2px;
+      }
+      .auth-grid input:invalid:not(:placeholder-shown),
+      .auth-grid select:invalid:not(:placeholder-shown) {
+        border-color: #ef4444;
+      }
+      .auth-grid input:valid:not(:placeholder-shown),
+      .auth-grid select:valid:not(:placeholder-shown) {
+        border-color: #22c55e;
+      }
+      .face-guidance-overlay {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: rgba(0,0,0,0.65);
+        color: #fff;
+        padding: 10px 14px;
+        font-size: 0.9rem;
+        font-weight: 500;
+        text-align: center;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.3s;
+        z-index: 2;
+      }
+      .face-guidance-overlay.visible {
+        opacity: 1;
+      }
+    </style>
+    <script>
+      (function () {
+        /* ---------- Validación en tiempo real ---------- */
+        var fieldErrors = {
+          nombres: { pattern: /^[A-Za-záéíóúÁÉÍÓÚñÑ ]+$/, msg: "Solo se permiten letras" },
+          apellidos: { pattern: /^[A-Za-záéíóúÁÉÍÓÚñÑ ]+$/, msg: "Solo se permiten letras" },
+          numero_documento: { pattern: /^[0-9]+$/, msg: "Solo se permiten números" },
+          telefono: { pattern: /^[0-9]+$/, msg: "Solo se permiten números" },
+          correo: { pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, msg: "Correo electrónico inválido" },
+          contrasena: { pattern: null, msg: "La contraseña debe tener entre 8 y 12 caracteres", fn: function(v) { return v.length >= 8 && v.length <= 12; } },
+          id_tipo_documento: { pattern: null, msg: "Selecciona un tipo de documento", fn: function(v) { return v !== ""; } },
+          id_tipo_genero: { pattern: null, msg: "Selecciona un género", fn: function(v) { return v !== ""; } }
+        };
+
+        function validateField(id) {
+          var input = document.getElementById(id);
+          var errorSpan = document.getElementById("error-" + id);
+          if (!input || !errorSpan) return;
+          var rules = fieldErrors[id];
+          if (!rules) return;
+          var value = input.value;
+          var valid = true;
+          if (rules.fn) {
+            valid = rules.fn(value);
+          } else if (rules.pattern) {
+            valid = rules.pattern.test(value);
+          }
+          if (value === "") {
+            errorSpan.textContent = "";
+            input.style.borderColor = "";
+          } else if (!valid) {
+            errorSpan.textContent = rules.msg;
+            input.style.borderColor = "#ef4444";
+          } else {
+            errorSpan.textContent = "";
+            input.style.borderColor = "#22c55e";
+          }
+        }
+
+        var validatesOnInput = ["nombres", "apellidos", "numero_documento", "telefono", "correo", "contrasena"];
+        validatesOnInput.forEach(function(id) {
+          var el = document.getElementById(id);
+          if (el) el.addEventListener("input", function() { validateField(id); });
+        });
+        var validatesOnChange = ["id_tipo_documento", "id_tipo_genero"];
+        validatesOnChange.forEach(function(id) {
+          var el = document.getElementById(id);
+          if (el) el.addEventListener("change", function() { validateField(id); });
+        });
+
+        /* ---------- Captura facial ---------- */
+        var video = document.getElementById("face-video");
+        var placeholder = document.getElementById("face-placeholder");
+        var startButton = document.getElementById("start-face-camera");
+        var captureButton = document.getElementById("capture-face");
+        var dataInput = document.getElementById("foto_rostro_data");
+        var thumbnails = document.getElementById("face-thumbnails");
+        var guidanceOverlay = document.getElementById("face-guidance-overlay");
+        var guidanceText = document.getElementById("face-guidance-text");
+        var stream = null;
+        var photos = [];
+
+        var MAX_PHOTOS = 5;
+
+        if (!video || !startButton || !captureButton || !dataInput || !thumbnails) return;
+
+        var GUIDANCE = [
+          "Mira directamente a la cámara",
+          "Gira tu rostro ligeramente a la izquierda",
+          "Gira tu rostro ligeramente a la derecha",
+          "Inclina tu rostro hacia arriba",
+          "Inclina tu rostro hacia abajo",
+          "¡Listo! Has tomado todas las fotos"
+        ];
+
+        function updateGuidance() {
+          if (!guidanceText) return;
+          var idx = Math.min(photos.length, GUIDANCE.length - 1);
+          guidanceText.textContent = GUIDANCE[idx];
+          if (guidanceOverlay) {
+            guidanceOverlay.classList.toggle("visible", photos.length < MAX_PHOTOS && video.style.display !== "none");
+          }
+        }
+
+        function renderThumbnails() {
+          thumbnails.innerHTML = "";
+          photos.forEach(function (src, index) {
+            var wrap = document.createElement("div");
+            wrap.className = "thumb-wrap";
+            var img = document.createElement("img");
+            img.src = src;
+            img.alt = "Foto " + (index + 1);
+            wrap.appendChild(img);
+            var btn = document.createElement("button");
+            btn.className = "thumb-remove";
+            btn.textContent = "x";
+            btn.type = "button";
+            btn.addEventListener("click", function () {
+              photos.splice(index, 1);
+              dataInput.value = photos.length ? JSON.stringify(photos) : "";
+              renderThumbnails();
+              updateGuidance();
+              if (photos.length < MAX_PHOTOS) captureButton.disabled = false;
+            });
+            wrap.appendChild(btn);
+            thumbnails.appendChild(wrap);
+          });
+          if (photos.length === 0 && placeholder) {
+            placeholder.style.display = "block";
+          }
+        }
+
+        startButton.addEventListener("click", async function () {
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({
+              video: { facingMode: "user", width: 640, height: 480 }
+            });
+            video.srcObject = stream;
+            video.style.display = "block";
+            if (placeholder) placeholder.style.display = "none";
+            captureButton.disabled = photos.length >= MAX_PHOTOS;
+            updateGuidance();
+          } catch (error) {
+            alert("No fue posible activar la cámara: " + error.message);
+          }
+        });
+
+        captureButton.addEventListener("click", function () {
+          if (photos.length >= MAX_PHOTOS) return;
+          var canvas = document.createElement("canvas");
+          canvas.width = video.videoWidth || 640;
+          canvas.height = video.videoHeight || 480;
+          canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+          var imageData = canvas.toDataURL("image/jpeg", 0.9);
+          photos.push(imageData);
+          dataInput.value = JSON.stringify(photos);
+          renderThumbnails();
+          updateGuidance();
+          if (photos.length >= MAX_PHOTOS) {
+            captureButton.disabled = true;
+            if (stream) {
+              stream.getTracks().forEach(function (track) { track.stop(); });
+              stream = null;
+            }
+            video.style.display = "none";
+            if (placeholder) placeholder.style.display = "none";
+          }
+        });
+      })();
+    </script>
+  {% endif %}
+
+</body>
+</html>
