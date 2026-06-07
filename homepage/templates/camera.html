@@ -30,7 +30,6 @@
             {% if session_user_id %}
                 <a href="{{ url_for(session_dashboard_endpoint) }}" class="tool-link">Panel</a>
                 <a href="{{ url_for('profile') }}" class="tool-link">Perfil</a>
-                <a href="{{ url_for('logout') }}" class="tool-link">Cerrar sesión</a>
             {% else %}
                 <a href="{{ url_for('login') }}" class="tool-link">Iniciar sesión</a>
                 <a href="{{ url_for('register') }}" class="tool-link">Registrarse</a>
@@ -84,6 +83,12 @@
                         </span>
                         <p id="faceRecognitionStatus">Esperando inicio de c&aacute;mara...</p>
                     </div>
+                </div>
+
+                <div class="disposal-result" id="disposalResult" style="display:none;">
+                    <div class="disposal-icon" id="disposalIcon"></div>
+                    <div class="disposal-text" id="disposalText"></div>
+                    <div class="disposal-detail" id="disposalDetail"></div>
                 </div>
 
                 <div class="live-panel" id="livePanel" style="display:none;">

@@ -435,6 +435,22 @@
 
       </form>
 
+      {% if mode == 'two_factor' %}
+      <div class="code-timer" id="codeTimer" data-ttl="{{ ttl_seconds }}">
+        <span class="code-timer-count" id="codeTimerCount"></span>
+        <form method="post" action="{{ url_for('resend_two_factor_code') }}" class="code-resend-form" id="codeResendForm" style="display:none">
+          <button type="submit" class="button secondary">Reenviar código</button>
+        </form>
+      </div>
+      {% elif mode == 'verify_password_reset' %}
+      <div class="code-timer" id="codeTimer" data-ttl="{{ ttl_seconds }}">
+        <span class="code-timer-count" id="codeTimerCount"></span>
+        <form method="post" action="{{ url_for('resend_password_reset_code') }}" class="code-resend-form" id="codeResendForm" style="display:none">
+          <button type="submit" class="button secondary">Reenviar código</button>
+        </form>
+      </div>
+      {% endif %}
+
       <div class="auth-switch">
 
         {% if mode == 'login' %}
@@ -736,6 +752,52 @@
         });
       })();
     </script>
+  {% endif %}
+
+  {% if mode == 'two_factor' or mode == 'verify_password_reset' %}
+  <style>
+    .code-timer {
+      margin-top: 12px;
+      text-align: center;
+      font-size: 0.9rem;
+    }
+    .code-timer-count {
+      font-weight: 700;
+      color: var(--primary, #2563eb);
+      font-size: 1.1rem;
+    }
+    .code-resend-form {
+      margin-top: 8px;
+    }
+    .code-resend-form .button {
+      font-size: 0.85rem;
+      padding: 6px 16px;
+    }
+  </style>
+  <script>
+    (function () {
+      var timerEl = document.getElementById("codeTimer");
+      var countEl = document.getElementById("codeTimerCount");
+      var resendForm = document.getElementById("codeResendForm");
+      if (!timerEl || !countEl) return;
+
+      var ttl = parseInt(timerEl.getAttribute("data-ttl"), 10) || 60;
+      var remaining = ttl;
+
+      function updateTimer() {
+        if (remaining <= 0) {
+          countEl.textContent = "Código expirado";
+          if (resendForm) resendForm.style.display = "";
+          return;
+        }
+        countEl.textContent = "Reenvía el código en " + remaining + " segundos";
+        remaining--;
+      }
+
+      updateTimer();
+      setInterval(updateTimer, 1000);
+    })();
+  </script>
   {% endif %}
 
 </body>

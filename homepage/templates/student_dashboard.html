@@ -130,6 +130,7 @@
         <table class="users-table compact-users-table">
           <thead>
             <tr>
+              <th>Evidencia</th>
               <th>Residuo</th>
               <th>Categoria</th>
               <th>Caneca</th>
@@ -185,7 +186,11 @@
             var tr = document.createElement('tr');
             var icono = r.es_correcto ? '\u2705' : '\u274c';
             var color = r.es_correcto ? '#16a34a' : '#dc2626';
-            tr.innerHTML = '<td>' + (r.residuo_detectado || '---') + '</td>' +
+            var evidenceImg = r.imagen_evidencia
+              ? '<a href="/static/' + r.imagen_evidencia + '" target="_blank"><img src="/static/' + r.imagen_evidencia + '" class="evidence-thumb" alt="Evidencia"></a>'
+              : '---';
+            tr.innerHTML = '<td>' + evidenceImg + '</td>' +
+              '<td>' + (r.residuo_detectado || '---') + '</td>' +
               '<td>' + (r.categoria_asignada || '---') + '</td>' +
               '<td>' + (r.container_color || '---') + '</td>' +
               '<td style="color:' + color + ';font-weight:700">' + icono + ' ' + (r.es_correcto ? 'Correcto' : 'Incorrecto') + '</td>' +

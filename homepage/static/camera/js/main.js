@@ -60,9 +60,11 @@ let lastDetectResult = null;
 let isDetecting = false;
 let isRecognizingFace = false;
 let isClassifying = false;
+let faceRecognitionFailCount = 0;
+const MAX_FACE_FAILURES = 4;
 let lastAutoCaptureTime = 0;
 const AUTO_CAPTURE_COOLDOWN = 4000;
-const DETECT_INTERVAL_MS = 1500;
+const DETECT_INTERVAL_MS = 800;
 const FACE_RECOGNIZE_INTERVAL_MS = 2000;
 
 const CATEGORY_CONFIG = {
@@ -131,6 +133,7 @@ stopCamera.addEventListener('click', () => {
     stopCamera.disabled = true;
     livePanel.style.display = 'none';
     recognizedUser = null;
+    faceRecognitionFailCount = 0;
 });
 
 if (resultsAddEcoPoint) {
@@ -235,69 +238,98 @@ async function captureAndDetect() {
     }
 }
 
+function showDisposalResult(validation, wasteItems, containers) {
+    const el = document.getElementById('disposalResult');
+    const icon = document.getElementById('disposalIcon');
+    const text = document.getElementById('disposalText');
+    const detail = document.getElementById('disposalDetail');
+
+    if (!validation || validation.valid === null) {
+        el.style.display = 'none';
+        return;
+    }
+
+    const isValid = validation.valid;
+    el.className = 'disposal-result ' + (isValid ? 'correcto' : 'incorrecto');
+    icon.textContent = isValid ? '\u2705' : '\u274C';
+    text.textContent = isValid ? '\u00a1Correcto!' : 'Incorrecto';
+
+    let detailText = validation.message || '';
+    if (validation.results && validation.results.length > 0) {
+        const checks = validation.results[0].checks || [];
+        if (checks.length > 0) {
+            const wrong = checks.filter(c => !c.is_correct);
+            if (wrong.length > 0) {
+                detailText = wrong.map(c =>
+                    '\u201c' + c.waste_class + '\u201d deber\u00eda ir en ' +
+                    (c.expected_category === 'organico' ? 'caneca verde' :
+                     c.expected_category === 'aprovechable' ? 'caneca blanca' : 'caneca negra')
+                ).join('. ');
+            } else if (isValid && checks.length > 0) {
+                detailText = checks.map(c =>
+                    '\u201c' + c.waste_class + '\u201d va en la caneca correcta'
+                ).join(', ');
+            }
+        }
+    }
+    detail.textContent = detailText;
+    el.style.display = 'flex';
+
+    clearTimeout(window._disposalTimer);
+    window._disposalTimer = setTimeout(() => {
+        el.style.display = 'none';
+    }, 5000);
+}
+
 function tryAutoCapture(result, rawCanvas) {
     const now = Date.now();
+    const validation = result.validation;
     const hasPerson = result.total_persons > 0;
     const hasWaste = result.waste_items.length > 0;
     const hasContainer = result.containers && result.containers.length > 0;
+    const isDepositing = validation && validation.valid !== null;
     const cooldownOk = now - lastAutoCaptureTime >= AUTO_CAPTURE_COOLDOWN;
 
-    if (hasPerson && hasWaste && hasContainer && cooldownOk && !isClassifying) {
+    if (hasPerson && hasWaste && hasContainer && isDepositing && cooldownOk && !isClassifying) {
         isClassifying = true;
         lastAutoCaptureTime = now;
         showSnapshotFlash();
 
-        autoStatus.textContent = '\u{1F4F7} \u00a1Foto autom\u00e1tica!';
-        autoStatus.style.display = 'inline';
-        setTimeout(() => {
-            if (autoStatus.textContent.includes('autom\u00e1tica')) {
-                autoStatus.style.display = 'none';
-            }
-        }, 3000);
+        showDisposalResult(validation, result.waste_items, result.containers);
 
-        rawCanvas.toBlob(async (blob) => {
-            try {
-                const formData = new FormData();
-                formData.append('image', blob, 'auto_capture.jpg');
-                const resp = await fetch('/camara/classify', { method: 'POST', body: formData });
-                if (!resp.ok) throw new Error('Error en clasificaci\u00f3n');
-                const classifyResult = await resp.json();
-                displayResults(classifyResult);
-                if (recognizedUser) {
-                    var action = classifyResult.validation && classifyResult.validation.valid ? 'sumar' : 'restar';
-                    var containerColor = (result.containers && result.containers.length > 0) ? result.containers[0].color : '';
-                    fetch('/camara/registrar-clasificacion', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            documento: recognizedUser.numero_documento,
-                            action: action,
-                            cantidad: 1,
-                            waste_items: classifyResult.waste_items || classifyResult.detections || [],
-                            container_color: containerColor,
-                            validation: classifyResult.validation || {},
-                            auto_capture: true,
-                        }),
-                    }).then(r => r.json()).then(data => {
-                        if (data.ok && data.user) {
-                            recognizedUser = data.user;
-                            if (resultsFaceSection.style.display !== 'none') {
-                                resultsUserEcoPoints.textContent = recognizedUser.ecopuntos;
-                                resultsUserEcoFines.textContent = recognizedUser.ecomultas;
-                                resultsUserBalance.textContent = recognizedUser.saldo_ambiental;
-                            }
-                            faceRecognitionStatus.textContent = action === 'sumar'
-                                ? 'Residuo clasificado correctamente. +1 ecopunto'
-                                : 'Residuo clasificado incorrectamente. +1 ecomulta';
-                        }
-                    }).catch(err => console.error('Register classification error:', err));
+        if (recognizedUser) {
+            var action = validation.valid ? 'sumar' : 'restar';
+            var containerColor = (result.containers && result.containers.length > 0) ? result.containers[0].color : '';
+            var frameData = rawCanvas ? rawCanvas.toDataURL('image/jpeg', 0.7) : '';
+            fetch('/camara/registrar-clasificacion', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    documento: recognizedUser.numero_documento,
+                    action: action,
+                    cantidad: 1,
+                    waste_items: result.waste_items || [],
+                    container_color: containerColor,
+                    validation: validation,
+                    auto_capture: true,
+                    imagen: frameData,
+                }),
+            }).then(r => r.json()).then(data => {
+                if (data.ok && data.user) {
+                    recognizedUser = data.user;
+                    if (resultsFaceSection.style.display !== 'none') {
+                        resultsUserEcoPoints.textContent = recognizedUser.ecopuntos;
+                        resultsUserEcoFines.textContent = recognizedUser.ecomultas;
+                        resultsUserBalance.textContent = recognizedUser.saldo_ambiental;
+                    }
+                    faceRecognitionStatus.textContent = action === 'sumar'
+                        ? 'Residuo clasificado correctamente. +1 ecopunto'
+                        : 'Residuo clasificado incorrectamente. +1 ecomulta';
                 }
-            } catch (err) {
-                console.error('Auto-classify error:', err);
-            } finally {
-                isClassifying = false;
-            }
-        }, 'image/jpeg', 0.9);
+            }).catch(err => console.error('Register classification error:', err));
+        }
+
+        setTimeout(() => { isClassifying = false; }, 2000);
     }
 }
 
@@ -505,6 +537,8 @@ async function classifyBlob(blob, source) {
     }
 }
 
+var lastEvidencePath = null;
+
 function displayResults(result) {
     resultsPanel.style.display = 'block';
     resultsPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -532,6 +566,8 @@ function displayResults(result) {
     } else {
         mainCategoryBadge.style.display = 'none';
     }
+
+    lastEvidencePath = result.evidence_path || null;
 
     if (result.annotated_image) {
         annotatedContainer.style.display = 'block';
@@ -594,36 +630,15 @@ function stopFaceRecognition() {
 function cropFaceRegion() {
     const vw = video.videoWidth || 640;
     const vh = video.videoHeight || 480;
-
-    let sx = 0, sy = 0, sw = vw, sh = vh;
-    if (lastDetectResult && lastDetectResult.persons && lastDetectResult.persons.length > 0) {
-        var person = lastDetectResult.persons[0];
-        var bx1 = person.bbox[0], by1 = person.bbox[1], bx2 = person.bbox[2], by2 = person.bbox[3];
-        var pw = bx2 - bx1;
-        var ph = by2 - by1;
-        var faceTop = by1;
-        var faceBottom = by1 + ph * 0.35;
-        var faceHeight = faceBottom - faceTop;
-        var faceWidth = faceHeight;
-        var faceCenter = bx1 + pw / 2;
-        sx = Math.max(0, Math.round(faceCenter - faceWidth / 2));
-        sy = Math.max(0, Math.round(faceTop));
-        sw = Math.min(vw - sx, Math.round(faceWidth));
-        sh = Math.min(vh - sy, Math.round(faceHeight));
-    }
-
-    if (sw <= 0 || sh <= 0) return null;
-
+    if (vw <= 0 || vh <= 0) return null;
     const ctx = faceCropCanvas.getContext('2d');
     ctx.clearRect(0, 0, 224, 224);
-    var minDim = Math.min(sw, sh);
-    var scale = 224 / minDim;
-    var scaledW = Math.ceil(sw * scale);
-    var scaledH = Math.ceil(sh * scale);
-    var dx = Math.floor((scaledW - 224) / 2);
-    var dy = Math.floor((scaledH - 224) / 2);
-    ctx.drawImage(video, sx, sy, sw, sh, -dx, -dy, scaledW, scaledH);
-
+    const scale = Math.min(224 / vw, 224 / vh);
+    const dw = Math.round(vw * scale);
+    const dh = Math.round(vh * scale);
+    const dx = Math.floor((224 - dw) / 2);
+    const dy = Math.floor((224 - dh) / 2);
+    ctx.drawImage(video, 0, 0, vw, vh, dx, dy, dw, dh);
     return faceCropCanvas.toDataURL('image/jpeg', 0.8);
 }
 
@@ -646,21 +661,31 @@ async function recognizeFaceFromVideo() {
 
         const data = await response.json();
         if (!response.ok || !data.ok) {
-            if (recognizedUser) {
+            faceRecognitionFailCount++;
+            if (recognizedUser && faceRecognitionFailCount >= MAX_FACE_FAILURES) {
                 recognizedUser = null;
                 faceRecognitionStatus.textContent = 'Buscando rostro registrado...';
-            } else if (faceRecognitionStatus.textContent !== 'Buscando rostro...') {
+            } else if (!recognizedUser && faceRecognitionStatus.textContent !== 'Buscando rostro...') {
                 faceRecognitionStatus.textContent = 'Buscando rostro registrado...';
             }
             return;
         }
 
+        faceRecognitionFailCount = 0;
+
         if (recognizedUser && recognizedUser.numero_documento === data.user.numero_documento) return;
 
         recognizedUser = data.user;
+        resultsFaceSection.style.display = 'block';
+        resultsUserName.textContent = `${recognizedUser.nombres} ${recognizedUser.apellidos}`;
+        resultsUserDocument.textContent = `Documento: ${recognizedUser.numero_documento}`;
+        resultsUserEcoPoints.textContent = recognizedUser.ecopuntos;
+        resultsUserEcoFines.textContent = recognizedUser.ecomultas;
+        resultsUserBalance.textContent = recognizedUser.saldo_ambiental;
         faceRecognitionStatus.textContent = `Usuario: ${recognizedUser.nombres} ${recognizedUser.apellidos} (${Math.round(data.confidence * 100)}%)`;
     } catch (error) {
         console.error('Face recognition error:', error);
+        faceRecognitionFailCount++;
     } finally {
         isRecognizingFace = false;
     }

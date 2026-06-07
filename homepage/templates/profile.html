@@ -122,6 +122,18 @@
             <div class="detail-item"><span>Fecha de registro</span><strong>{{ user.fecha_registro }}</strong></div>
           </div>
         </article>
+
+        {% set _role = user.tipo_usuario | lower %}
+        {% if 'admin' in _role or 'docente' in _role %}
+        <article class="card dashboard-card">
+          <span class="section-tag">Ambiental</span>
+          <div class="detail-list">
+            <div class="detail-item"><span>EcoPuntos</span><strong>{{ user.ecopuntos }}</strong></div>
+            <div class="detail-item"><span>Ecomultas</span><strong>{{ user.ecomultas }}</strong></div>
+            <div class="detail-item"><span>Saldo ambiental</span><strong>{{ user.saldo_ambiental }}</strong></div>
+          </div>
+        </article>
+        {% endif %}
       </div>
     </section>
   </main>

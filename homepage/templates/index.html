@@ -2,8 +2,7 @@
 <!--
   ============================================================
   index.html  —  Página principal de Ecovigilante
-  Landing page pública del proyecto. Muestra la visión,
-  objetivos, tecnologías y un asistente IA lateral.
+  Landing page pública del proyecto.
   ============================================================
   @ Con fines académicos
   por KarolyMaira
@@ -31,38 +30,6 @@
 
   <!--
     ========================================================
-    Panel lateral del Asistente IA (GPT4All local)
-    Se abre/cierra según el parámetro open_ai_panel.
-    ========================================================
-  -->
-  <aside class="ai-panel {% if open_ai_panel %}is-open{% endif %}" id="ai-panel" aria-hidden="{{ 'false' if open_ai_panel else 'true' }}">
-    <div class="ai-panel-header">
-      <div>
-        <span class="section-tag">Asistente IA</span>
-        <h2>Consulta lateral</h2>
-      </div>
-      <a class="ai-close-link" href="{{ url_for('home') }}" aria-label="Cerrar panel">x</a>
-    </div>
-
-    <p class="ai-panel-copy">
-      <strong>IA</strong>.
-    </p>
-
-    <!-- Formulario de consulta al modelo GPT4All -->
-    <form class="ai-form" id="ai-form">
-      <label for="ai-prompt">Pregunta</label>
-      <textarea id="ai-prompt" name="prompt" rows="5" placeholder="Ejemplo: ¿En qué recipiente van las bolsas plásticas?"></textarea>
-      <button class="button primary ai-submit" type="submit">Preguntar a la IA</button>
-    </form>
-
-    <!-- Contenedor donde se muestra la respuesta de la IA -->
-    <div class="ai-response" id="ai-response">
-      <p class="ai-placeholder">La respuesta aparecerá aquí cuando envies una pregunta.</p>
-    </div>
-  </aside>
-
-  <!--
-    ========================================================
     HERO  —  Cabecera principal con navegación y presentación
     ========================================================
   -->
@@ -78,7 +45,7 @@
 
     <!-- Enlaces de navegación principal -->
     <div class="page-tools">
-      <a href="{{ url_for('home') }}" class="tool-link {% if not open_ai_panel %}active{% endif %}">Inicio</a>
+      <a href="{{ url_for('home') }}" class="tool-link active">Inicio</a>
       <a href="{{ url_for('camera_page') }}" class="tool-link tool-link-icon" aria-label="Abrir clasificador con cámara">
         <span aria-hidden="true">&#128247;</span>
         <span>Cámara IA</span>
@@ -86,7 +53,6 @@
       {% if session_user_id %}
         <a href="{{ url_for(session_dashboard_endpoint) }}" class="tool-link">Panel</a>
         <a href="{{ url_for('profile') }}" class="tool-link">Perfil</a>
-        <a href="{{ url_for('logout') }}" class="tool-link">Cerrar sesión</a>
       {% else %}
         <a href="{{ url_for('login') }}" class="tool-link">Iniciar sesión</a>
         <a href="{{ url_for('register') }}" class="tool-link">Registrarse</a>
@@ -363,17 +329,19 @@
         <article class="card objective-main">
           <h3>Objetivo general</h3>
           <p>
-            Desarrollar un aplicativo web que permita la asignación de multas y puntos a
-            los estudiantes, en función de la correcta segregación de residuos, utilizando
-            inteligencia artificial, dirigido a alumnos de séptimo semestre de Tecnología
-            en Gestión Informática de la universidad UniEspinal, en El Espinal, Tolima.
+            Desarrollar un servicio web con Visual Computing que permita al docente del
+            área ambiental realizar el seguimiento de la correcta segregación de residuos
+            sólidos, mediante la asignación de puntos y medidas correctivas a los
+            estudiantes de séptimo semestre de Tecnología en Gestión Informática de
+            UniEspinal, en el Espinal - Tolima.
           </p>
         </article>
         <article class="card">
           <h3>Objetivos especificos</h3>
           <ul class="clean-list">
-            <li>Analizar los requisitos funcionales y no funcionales necesarios para el desarrollo del aplicativo web enfocado en la gestión de residuos.</li>
-            <li>Desarrollar un aplicativo web integrando tecnologías de inteligencia artificial para la clasificación de residuos.</li>
+            <li>Analizar los requisitos funcionales y no funcionales necesarios para el desarrollo del servicio web enfocado en la gestión de residuos.</li>
+            <li>Desarrollar el servicio web integrando tecnologías de Visual Computing mediante Teachable Machine y YOLOv8 para la identificación y clasificación de residuos.</li>
+            <li>Establecer módulos que permitan al docente ver puntos y la segregación inadecuada de los estudiantes, sirviendo como herramienta de soporte para la aplicación presencial de medidas correctivas.</li>
             <li>Ejecutar pruebas del sistema para identificar errores y asegurar su correcto funcionamiento antes de su implementación.</li>
           </ul>
         </article>
@@ -423,58 +391,16 @@
 
   <!--
     ========================================================
-    SCRIPT: Loader + Asistente IA (GPT4All)
+    SCRIPT: Loader + Carrusel de metas
     ========================================================
   -->
   <script>
-    // Oculta el loader animado al cargar la página
     window.addEventListener("load", function () {
       const loader = document.getElementById("page-loader");
       if (!loader) return;
       loader.classList.add("is-hidden");
       window.setTimeout(function () { loader.remove(); }, 500);
     });
-
-    // Envío asíncrono del formulario del asistente IA
-    (function () {
-      const form = document.getElementById("ai-form");
-      const promptField = document.getElementById("ai-prompt");
-      const responseBox = document.getElementById("ai-response");
-      if (!form || !promptField || !responseBox) return;
-
-      form.addEventListener("submit", async function (event) {
-        event.preventDefault();
-        const prompt = promptField.value.trim();
-        if (!prompt) {
-          responseBox.innerHTML = '<p class="ai-error">Escribe una pregunta antes de consultar la IA.</p>';
-          return;
-        }
-        responseBox.innerHTML = '<p class="ai-loading">Consultando la IA local...</p>';
-        try {
-          const response = await fetch("{{ url_for('ia_chat') }}", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ prompt })
-          });
-          const data = await response.json();
-          if (!response.ok || !data.ok) {
-            throw new Error(data.error || "No fue posible obtener respuesta.");
-          }
-          responseBox.innerHTML = `<div class="ai-answer">${data.answer.replace(/\n/g, "<br>")}</div>`;
-        } catch (error) {
-          responseBox.innerHTML = `<p class="ai-error">${error.message}</p>`;
-        }
-      });
-    })();
-  </script>
-
-  <!--
-    ========================================================
-    SCRIPT: Carrusel de metas
-    Scroll horizontal con botones + auto-play + pausa hover
-    ========================================================
-  -->
-  <script>
     const carousel = document.getElementById("goalsCarousel");
 
     document.getElementById("nextGoal").addEventListener("click", () => {

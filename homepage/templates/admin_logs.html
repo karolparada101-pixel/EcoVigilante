@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Logs | Administrador | Ecovigilante</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Sora:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+  <style>
+    .log-viewer {
+      background: #0d1117;
+      color: #e6edf3;
+      font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+      font-size: 0.78rem;
+      line-height: 1.5;
+      padding: 16px;
+      border-radius: 8px;
+      white-space: pre-wrap;
+      word-break: break-all;
+      max-height: 70vh;
+      overflow-y: auto;
+      margin-top: 12px;
+    }
+    .log-viewer::-webkit-scrollbar { width: 8px; }
+    .log-viewer::-webkit-scrollbar-track { background: #161b22; border-radius: 4px; }
+    .log-viewer::-webkit-scrollbar-thumb { background: #30363d; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <main class="users-page dashboard-page">
+    <div class="page-tools">
+      <a href="{{ url_for('home') }}" class="tool-link">Inicio</a>
+      <a href="{{ url_for('admin_dashboard') }}" class="tool-link">Admin</a>
+      <a href="{{ url_for('users') }}" class="tool-link">Usuarios</a>
+      <a href="{{ url_for('admin_logs') }}" class="tool-link active">Logs</a>
+      <a href="{{ url_for('profile') }}" class="tool-link">Perfil</a>
+    </div>
+
+    <section class="section narrow-section">
+      <div class="section-heading">
+        <span class="section-tag">Registros del sistema</span>
+        <h2>Logs de Ecovigilante</h2>
+      </div>
+      <div class="log-viewer">{{ log_content }}</div>
+    </section>
+  </main>
+</body>
+</html>

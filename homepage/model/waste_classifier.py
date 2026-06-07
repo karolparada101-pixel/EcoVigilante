@@ -5,6 +5,27 @@ import numpy as np
 from PIL import Image
 from ultralytics import YOLO
 
+COCO_TO_SPANISH = {
+    'bottle': 'Botella', 'wine glass': 'Copa', 'cup': 'Taza',
+    'fork': 'Tenedor', 'knife': 'Cuchillo', 'spoon': 'Cuchara',
+    'bowl': 'Tazón', 'book': 'Libro', 'cell phone': 'Celular',
+    'laptop': 'Portátil', 'remote': 'Control remoto', 'keyboard': 'Teclado',
+    'tv': 'TV', 'mouse': 'Ratón', 'scissors': 'Tijeras',
+    'vase': 'Florero', 'clock': 'Reloj', 'teddy bear': 'Peluche',
+    'apple': 'Manzana', 'banana': 'Banano', 'orange': 'Naranja',
+    'broccoli': 'Brócoli', 'carrot': 'Zanahoria', 'sandwich': 'Sándwich',
+    'hot dog': 'Perro caliente', 'pizza': 'Pizza', 'donut': 'Dona',
+    'cake': 'Pastel', 'potted plant': 'Planta',
+    'chair': 'Silla', 'couch': 'Sofá', 'bed': 'Cama',
+    'toilet': 'Inodoro', 'toothbrush': 'Cepillo dental',
+    'hair drier': 'Secador', 'backpack': 'Mochila',
+    'handbag': 'Bolso', 'suitcase': 'Maleta',
+    'frisbee': 'Disco volador', 'skateboard': 'Patineta',
+    'sports ball': 'Pelota deportiva', 'baseball glove': 'Guante de béisbol',
+    'umbrella': 'Sombrilla', 'tie': 'Corbata',
+    'dining table': 'Mesa', 'tennis racket': 'Raqueta de tenis',
+}
+
 WASTE_MAP = {
     'bottle': 'aprovechable', 'wine glass': 'aprovechable', 'cup': 'aprovechable',
     'fork': 'aprovechable', 'knife': 'aprovechable', 'spoon': 'aprovechable',
@@ -82,7 +103,7 @@ class WasteClassifier:
             categories_count[category] += 1
 
             detections.append({
-                'class': cls_name,
+                'class': COCO_TO_SPANISH.get(cls_name, cls_name),
                 'confidence': round(confidence, 2),
                 'category': category,
                 'category_label': CATEGORY_INFO[category]['label'],
@@ -118,8 +139,9 @@ class WasteClassifier:
             confidence = float(box.conf[0])
             x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
 
+            cls_spanish = COCO_TO_SPANISH.get(cls_name, cls_name)
             item = {
-                'class': cls_name,
+                'class': cls_spanish,
                 'confidence': round(confidence, 2),
                 'bbox': [x1, y1, x2, y2],
             }
@@ -164,8 +186,9 @@ class WasteClassifier:
             confidence = float(box.conf[0])
             x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
 
+            cls_spanish = COCO_TO_SPANISH.get(cls_name, cls_name)
             item = {
-                'class': cls_name,
+                'class': cls_spanish,
                 'confidence': round(confidence, 2),
                 'bbox': [x1, y1, x2, y2],
             }

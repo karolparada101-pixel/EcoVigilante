@@ -4,11 +4,11 @@
 import hashlib
 import base64
 import json
+import logging
 import os
 import re
 import secrets
 import smtplib
-import subprocess
 import threading
 import time
 import unicodedata
@@ -16,12 +16,26 @@ from email.message import EmailMessage
 from io import BytesIO
 from pathlib import Path
 
+# ── Logging ──────────────────────────────────────────────
+LOG_DIR = Path(__file__).resolve().parent / "logs"
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.FileHandler(LOG_DIR / "ecovigilante.log", encoding="utf-8"),
+        logging.StreamHandler(),
+    ],
+)
+logger = logging.getLogger("ecovigilante")
+
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import SimpleDocTemplate, Spacer, Table, TableStyle, Paragraph
 
-from flask import Flask, Response, flash, jsonify, redirect, render_template, request, session, url_for
+from flask import Flask, Response, flash, jsonify, make_response, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
@@ -39,10 +53,9 @@ app = Flask(__name__)
 app.secret_key = "ecovigilante-homepage"
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024
 BASE_DIR = Path(__file__).resolve().parent
-IA_PYTHON = Path(r"D:\IA\venv\Scripts\python.exe")
-IA_SERVER = BASE_DIR / "ia_server.py"
 PROFILE_UPLOAD_DIR = BASE_DIR / "static" / "profile_photos"
 FACE_DATASET_DIR = BASE_DIR / "static" / "face_dataset"
+EVIDENCIA_DIR = BASE_DIR / "static" / "evidencias"
 ALLOWED_PROFILE_EXTENSIONS = {"jpg", "jpeg", "png", "webp"}
 ALLOWED_FACE_EXTENSIONS = {"jpg", "jpeg", "png", "webp"}
 
@@ -85,8 +98,6 @@ CAMERA_CATEGORY_FALLBACK = {
     "organico": {"label": "Organico", "desc": "Residuos de comida y vegetales"},
 }
 
-_ai_process = None
-_ai_lock = threading.Lock()
 _camera_classifier = None
 _camera_classifier_error = None
 _camera_lock = threading.Lock()
@@ -202,17 +213,22 @@ MAIL_CONFIG = {
     ),
     "use_tls": get_env_bool("MAIL_USE_TLS", "ECOVIGILANTE_MAIL_TLS", default=True),
 }
-SECURITY_CODE_TTL = get_env_int("EMAIL_OTP_GRACE_SECONDS", default=300)
+SECURITY_CODE_TTL = get_env_int("EMAIL_OTP_GRACE_SECONDS", default=60)
+RESEND_COOLDOWN = 180
 app.secret_key = get_env_value("FLASK_SECRET_KEY", default=app.secret_key)
 
 
 def get_db_connection():
     if mysql is None:
+        logger.error("Intento de conexion a BD sin modulo mysql disponible.")
         return None, "El servicio no esta disponible en este momento."
 
     try:
-        return mysql.connector.connect(**DB_CONFIG), None
+        connection = mysql.connector.connect(**DB_CONFIG)
+        logger.info("Conexion a BD establecida.")
+        return connection, None
     except Error as err:
+        logger.error("Error de conexion a BD: %s", err)
         if errorcode and getattr(err, "errno", None) == errorcode.ER_BAD_DB_ERROR:
             try:
                 bootstrap_config = {key: value for key, value in DB_CONFIG.items() if key != "database"}
@@ -225,8 +241,10 @@ def get_db_connection():
                 connection.commit()
                 cursor.close()
                 connection.close()
+                logger.info("Base de datos '%s' creada exitosamente.", DB_CONFIG['database'])
                 return mysql.connector.connect(**DB_CONFIG), None
-            except Error:
+            except Error as bootstrap_err:
+                logger.error("Error al crear la BD: %s", bootstrap_err)
                 return None, "El servicio no esta disponible en este momento."
         return None, "El servicio no esta disponible en este momento."
 
@@ -552,6 +570,15 @@ def save_registration_face(numero_documento, image_data_json=""):
     return saved_paths, None
 
 
+def save_evidence_image(image_bytes, user_id):
+    EVIDENCIA_DIR.mkdir(parents=True, exist_ok=True)
+    timestamp = int(time.time())
+    filename = f"evidencia_u{user_id}_{timestamp}.jpg"
+    filepath = EVIDENCIA_DIR / filename
+    filepath.write_bytes(image_bytes)
+    return f"evidencias/{filename}"
+
+
 def get_default_student_type_id():
     user_types, error = fetch_catalog("tipo_usuario", "id_tipo_usuario")
     if error:
@@ -626,14 +653,67 @@ def send_email_message(to_email, subject, body):
     message["Reply-To"] = MAIL_CONFIG["sender"]
     message["X-Ecovigilante-Notice"] = "security-code"
     message.set_content(body)
+
+    import re as _re
+    _code_match = _re.search(r'\b(\d{6})\b', body)
+    _code = _code_match.group(1) if _code_match else ''
+    _label = body.split(':')[0].strip() if ':' in body else 'Tu codigo'
+    _note = body.split('\n\n')[-1].strip() if '\n\n' in body else ''
+
     message.add_alternative(
         f"""
         <html>
-          <body style="font-family: Arial, sans-serif; color: #163126;">
-            <div style="max-width: 520px; padding: 24px; border: 1px solid #d8ead2; border-radius: 16px;">
-              <h2 style="margin-top: 0; color: #1d5a35;">Ecovigilante</h2>
-              <p>{body.replace(chr(10), '<br>')}</p>
-            </div>
+          <head>
+            <meta charset="UTF-8">
+          </head>
+          <body style="margin:0;padding:0;background:#eef6ea;font-family:'Segoe UI',Arial,sans-serif;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+                   style="background:#eef6ea;padding:32px 16px;">
+              <tr>
+                <td align="center">
+                  <table role="presentation" width="540" cellpadding="0" cellspacing="0"
+                         style="background:#ffffff;border-radius:24px;box-shadow:0 8px 32px rgba(24,58,39,0.10);overflow:hidden;">
+                    <tr>
+                      <td style="background:#1d5a35;padding:28px 32px;text-align:center;">
+                        <h1 style="margin:0;font-size:24px;font-weight:700;color:#ffffff;letter-spacing:1px;">
+                          ECOVIGILANTE
+                        </h1>
+                        <p style="margin:4px 0 0;font-size:13px;color:#b5d6a5;font-weight:400;">
+                          Seguimiento ambiental inteligente
+                        </p>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="padding:32px 36px;text-align:center;">
+                        <p style="margin:0 0 8px;font-size:14px;color:#4b6b5a;">
+                          {_label}
+                        </p>
+                        <div style="display:inline-block;background:#f0f7ec;border:2px dashed #6ab36d;border-radius:16px;padding:20px 40px;margin:12px 0;">
+                          <span style="font-size:42px;font-weight:800;letter-spacing:8px;color:#1d5a35;font-family:'Courier New',monospace;">
+                            {_code}
+                          </span>
+                        </div>
+                        <p style="margin:8px 0 0;font-size:13px;color:#6b8b7a;">
+                          {_note}
+                        </p>
+                        <hr style="border:none;border-top:1px solid #d8ead2;margin:24px 0;">
+                        <p style="margin:0;font-size:12px;color:#6b8b7a;line-height:1.5;">
+                          Este es un mensaje automático de Ecovigilante. Si no solicitaste este código,
+                          ignora este correo.
+                        </p>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="background:#f7fbf4;padding:16px 32px;text-align:center;border-top:1px solid #d8ead2;">
+                        <p style="margin:0;font-size:11px;color:#8aaa96;">
+                          Ecovigilante &mdash; {MAIL_CONFIG['sender']}
+                        </p>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
           </body>
         </html>
         """,
@@ -789,10 +869,12 @@ def fetch_catalog(table_name, id_field):
 def get_form_options():
     document_types, doc_error = fetch_catalog("tipo_documento", "id_tipo_documento")
     gender_types, gen_error = fetch_catalog("tipo_genero", "id_tipo_genero")
+    user_types, utype_error = fetch_catalog("tipo_usuario", "id_tipo_usuario")
     return {
         "document_types": document_types,
         "gender_types": gender_types,
-        "options_error": doc_error or gen_error,
+        "user_types": user_types,
+        "options_error": doc_error or gen_error or utype_error,
     }
 
 
@@ -867,6 +949,9 @@ def create_user(form_data):
                 (face_paths[0], new_user_id),
             )
         connection.commit()
+        if face_paths:
+            from face_recognizer import retrain
+            retrain()
         return generated_username, None
     except Error as err:
         if is_duplicate_error(err):
@@ -1341,12 +1426,26 @@ def ensure_classification_tables():
                 confianza_modelo FLOAT,
                 container_color VARCHAR(20),
                 es_auto_capture TINYINT(1) NOT NULL DEFAULT 1,
+                imagen_evidencia VARCHAR(255) NULL,
                 INDEX idx_reg_clasif_usuario (id_usuario),
                 INDEX idx_reg_clasif_fecha (fecha_hora)
             )
             """
         )
+        cursor.fetchall()
         connection.commit()
+        cursor.close()
+        cursor = connection.cursor()
+        try:
+            cursor.execute("SELECT imagen_evidencia FROM registros_clasificacion LIMIT 0")
+            cursor.fetchall()
+        except Error:
+            try:
+                cursor.execute("ALTER TABLE registros_clasificacion ADD COLUMN imagen_evidencia VARCHAR(255) NULL")
+                cursor.fetchall()
+                connection.commit()
+            except Error:
+                connection.rollback()
         return None
     except Error:
         return "No fue posible preparar la tabla de clasificaciones."
@@ -1721,64 +1820,6 @@ def apply_eco_action(numero_documento, action, amount=1):
         connection.close()
 
 
-def ensure_ai_process():
-    global _ai_process
-
-    if not IA_PYTHON.exists():
-        return None, "No se encontro el entorno de Python de la carpeta IA."
-
-    if not IA_SERVER.exists():
-        return None, "No se encontro el archivo servidor para consultar la IA."
-
-    if _ai_process and _ai_process.poll() is None:
-        return _ai_process, None
-
-    try:
-        _ai_process = subprocess.Popen(
-            [str(IA_PYTHON), str(IA_SERVER)],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            bufsize=1,
-        )
-    except Exception as err:  # pragma: no cover
-        return None, f"No fue posible iniciar la IA local: {err}"
-
-    return _ai_process, None
-
-
-def ask_local_ai(prompt):
-    with _ai_lock:
-        process, error = ensure_ai_process()
-        if error:
-            return None, error
-
-        try:
-            payload = json.dumps({"prompt": prompt}, ensure_ascii=False)
-            process.stdin.write(payload + "\n")
-            process.stdin.flush()
-
-            raw_line = process.stdout.readline()
-            if not raw_line:
-                detail = process.stderr.read().strip()
-                return None, detail or "La IA local dejo de responder."
-
-            message = json.loads(raw_line)
-        except json.JSONDecodeError:
-            return None, "La respuesta de la IA local no tuvo un formato valido."
-        except Exception as err:  # pragma: no cover
-            return None, f"No fue posible comunicarse con la IA local: {err}"
-
-    if not message.get("ok"):
-        return None, message.get("error") or "La IA local devolvio un error."
-
-    answer = (message.get("answer") or "").strip()
-    if not answer:
-        return None, "La IA no devolvio respuesta."
-    return answer, None
-
-
 @app.context_processor
 def inject_session_user():
     return {
@@ -1796,7 +1837,6 @@ def home():
         "index.html",
         color_palette=COLOR_PALETTE,
         font_showcase=FONT_SHOWCASE,
-        open_ai_panel=False,
     )
 
 
@@ -1819,7 +1859,10 @@ def camera_classify():
         return jsonify({"error": "No se encontro la imagen"}), 400
 
     image_bytes = request.files["image"].read()
-    return jsonify(classifier.classify(image_bytes))
+    result = classifier.classify(image_bytes)
+    result["evidence_path"] = save_evidence_image(image_bytes, 0)
+    logger.info("Imagen clasificada (upload). Detecciones: %d, Categoria principal: %s", len(result.get("detections", [])), result.get("main_category"))
+    return jsonify(result)
 
 
 @app.route("/camara/classify_base64", methods=["POST"])
@@ -1885,6 +1928,7 @@ def camera_eco_action():
     )
     if error:
         return jsonify({"ok": False, "error": error}), 400
+    logger.info("Ecoaccion aplicada a %s: %s x%d", payload.get("documento"), payload.get("accion"), payload.get("cantidad", 1))
     return jsonify({"ok": True, "user": user})
 
 
@@ -1905,6 +1949,16 @@ def camera_register_classification():
     validation = payload.get("validation", {})
     es_correcto = 1 if validation.get("valid") else 0
     es_auto = 1 if payload.get("auto_capture", False) else 0
+    raw_image = payload.get("imagen", "")
+
+    imagen_path = None
+    if raw_image:
+        try:
+            encoded = raw_image.split(",", 1)[1] if "," in raw_image else raw_image
+            image_bytes = base64.b64decode(encoded)
+            imagen_path = save_evidence_image(image_bytes, user["id"])
+        except Exception:
+            pass
 
     connection, db_error = get_db_connection()
     if db_error:
@@ -1917,8 +1971,9 @@ def camera_register_classification():
                 """
                 INSERT INTO registros_clasificacion
                     (id_usuario, residuo_detectado, categoria_asignada, categoria_correcta,
-                     es_correcto, confianza_modelo, container_color, es_auto_capture)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                     es_correcto, confianza_modelo, container_color, es_auto_capture,
+                     imagen_evidencia)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     user["id"],
@@ -1929,6 +1984,7 @@ def camera_register_classification():
                     item.get("confidence", 0.0),
                     container_color,
                     es_auto,
+                    imagen_path,
                 ),
             )
 
@@ -1945,9 +2001,14 @@ def camera_register_classification():
             return jsonify({"ok": False, "error": eco_error}), 400
 
         connection.commit()
+        logger.info(
+            "Clasificacion registrada - Usuario: %s (%s), Correcto: %s, Auto: %s, Items: %d",
+            user.get("usuario"), payload.get("documento"), es_correcto, es_auto, len(waste_items),
+        )
         return jsonify({"ok": True, "user": user, "registros": len(waste_items)})
-    except Error:
+    except Error as exc:
         connection.rollback()
+        logger.error("Error al registrar clasificacion: %s", exc)
         return jsonify({"ok": False, "error": "Error al registrar clasificacion."}), 500
     finally:
         if cursor is not None:
@@ -1988,7 +2049,7 @@ def api_user_stats(user_id):
         cursor.execute(
             """
             SELECT residuo_detectado, categoria_asignada, es_correcto, confianza_modelo,
-                   fecha_hora, container_color
+                   fecha_hora, container_color, imagen_evidencia
             FROM registros_clasificacion
             WHERE id_usuario = %s
             ORDER BY fecha_hora DESC
@@ -2000,6 +2061,40 @@ def api_user_stats(user_id):
         return jsonify(stats)
     except Error:
         return jsonify({"ok": False, "error": "Error al consultar estadisticas."}), 500
+    finally:
+        if cursor is not None:
+            cursor.close()
+        connection.close()
+
+
+@app.route("/api/evidencias-recientes")
+def api_recent_evidence():
+    error = ensure_classification_tables()
+    if error:
+        return jsonify({"ok": False, "error": error}), 500
+
+    connection, db_error = get_db_connection()
+    if db_error:
+        return jsonify({"ok": False, "error": db_error}), 500
+    cursor = None
+    try:
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT r.id, r.id_usuario, u.nombres, u.apellidos, u.numero_documento,
+                   r.residuo_detectado, r.categoria_asignada, r.es_correcto,
+                   r.fecha_hora, r.imagen_evidencia
+            FROM registros_clasificacion r
+            JOIN usuarios u ON r.id_usuario = u.id
+            WHERE r.imagen_evidencia IS NOT NULL AND r.imagen_evidencia != ''
+            ORDER BY r.fecha_hora DESC
+            LIMIT 30
+            """
+        )
+        rows = cursor.fetchall()
+        return jsonify({"ok": True, "evidencias": rows})
+    except Error:
+        return jsonify({"ok": False, "error": "Error al consultar evidencias."}), 500
     finally:
         if cursor is not None:
             cursor.close()
@@ -2102,7 +2197,8 @@ def camera_retrain_faces():
 @app.route("/usuarios")
 def users():
     users, db_message = fetch_users()
-    return render_template("users.html", users=users, db_message=db_message)
+    options = get_form_options()
+    return render_template("users.html", users=users, db_message=db_message, **options)
 
 
 @app.route("/mi-usuario")
@@ -2128,7 +2224,6 @@ def profile():
             "id_tipo_documento": request.form.get("id_tipo_documento", "").strip(),
             "numero_documento": request.form.get("numero_documento", "").strip(),
             "id_tipo_genero": request.form.get("id_tipo_genero", "").strip(),
-            "id_tipo_usuario": request.form.get("id_tipo_usuario", "").strip(),
             "correo": request.form.get("correo", "").strip(),
             "telefono": request.form.get("telefono", "").strip(),
         }
@@ -2145,6 +2240,7 @@ def profile():
                 else:
                     session["display_name"] = f"{form_data['nombres']} {form_data['apellidos']}"
                     session["email"] = form_data["correo"]
+                    logger.info("Perfil actualizado por usuario ID %s", user["id"])
                     flash("Perfil actualizado correctamente.", "success")
                     return redirect(url_for("profile"))
 
@@ -2388,6 +2484,24 @@ def admin_dashboard():
     )
 
 
+@app.route("/admin/logs")
+def admin_logs():
+    user, response = require_current_user()
+    if response:
+        return response
+
+    response = ensure_role(user, {"admin"})
+    if response:
+        return response
+
+    log_path = LOG_DIR / "ecovigilante.log"
+    log_content = ""
+    if log_path.exists():
+        log_content = log_path.read_text(encoding="utf-8")
+
+    return render_template("admin_logs.html", user=user, log_content=log_content)
+
+
 @app.route("/admin/usuarios/<int:user_id>/editar", methods=["POST"])
 def admin_edit_user(user_id):
     user, response = require_current_user()
@@ -2413,7 +2527,7 @@ def admin_edit_user(user_id):
     else:
         error = admin_update_user(user_id, form_data)
         flash(error or "Usuario actualizado correctamente.", "error" if error else "success")
-    return redirect(url_for("admin_dashboard"))
+    return redirect(url_for("users"))
 
 
 @app.route("/admin/usuarios/<int:user_id>/estado", methods=["POST"])
@@ -2428,43 +2542,15 @@ def admin_toggle_user_status(user_id):
 
     if user_id == user["id"]:
         flash("No puedes inhabilitar tu propio usuario administrador.", "error")
-        return redirect(url_for("admin_dashboard"))
+        return redirect(url_for("users"))
 
     active = request.form.get("activo") == "1"
     error = set_user_active_status(user_id, active)
     flash(error or ("Usuario habilitado." if active else "Usuario inhabilitado."), "error" if error else "success")
-    return redirect(url_for("admin_dashboard"))
+    return redirect(url_for("users"))
 
 
-# Ruta dedicada para acceder a la interfaz de preguntas a la IA.
-# Aqui no se muestra una pagina separada: se reutiliza la home
-# y se abre el panel lateral de IA en estado desplegado.
-@app.route("/ia")
-def ia_page():
-    return render_template(
-        "index.html",
-        color_palette=COLOR_PALETTE,
-        font_showcase=FONT_SHOWCASE,
-        open_ai_panel=True,
-    )
 
-
-# Endpoint que si ejecuta la consulta a la IA local.
-# Recibe la pregunta desde la vista /ia en formato JSON y devuelve
-# la respuesta tambien en JSON para mostrarla dinamicamente en pantalla.
-@app.route("/ia/chat", methods=["POST"])
-def ia_chat():
-    payload = request.get_json(silent=True) or {}
-    prompt = (payload.get("prompt") or "").strip()
-
-    if not prompt:
-        return jsonify({"ok": False, "error": "Escribe una pregunta para consultar la IA."}), 400
-
-    answer, error = ask_local_ai(prompt)
-    if error:
-        return jsonify({"ok": False, "error": error}), 500
-
-    return jsonify({"ok": True, "answer": answer})
 
 
 @app.route("/registro", methods=["GET", "POST"])
@@ -2526,7 +2612,9 @@ def register():
             generated_username, error = create_user(form_data)
             if error:
                 flash(error, "error")
+                logger.warning("Registro fallido: %s %s - %s", form_data["nombres"], form_data["apellidos"], error)
             else:
+                logger.info("Usuario registrado exitosamente: %s (%s)", generated_username, form_data["correo"])
                 flash(
                     f"Usuario registrado correctamente. Tu nombre de usuario es {generated_username}. Ahora inicia sesion con tu correo y contrasena.",
                     "success",
@@ -2548,6 +2636,7 @@ def forgot_password():
             if error:
                 flash("Si el correo esta registrado, enviaremos un codigo de recuperacion.", "success")
             else:
+                logger.info("Solicitud de recuperacion de contrasena para: %s", correo)
                 code = make_security_code()
                 session["password_reset"] = {
                     "user_id": user["id"],
@@ -2558,7 +2647,7 @@ def forgot_password():
                 ok, mail_error = send_email_message(
                     user["correo"],
                     f"Codigo de recuperacion Ecovigilante: {code}",
-                    f"Tu codigo de recuperacion es: {code}\n\nVence en 10 minutos.",
+                    f"Tu codigo de recuperacion es: {code}\n\nVence en 1 minuto.",
                 )
                 if ok:
                     flash("Enviamos un codigo de recuperacion a tu correo.", "success")
@@ -2600,7 +2689,7 @@ def verify_password_reset():
                 flash("Contrasena actualizada correctamente. Ya puedes iniciar sesion.", "success")
                 return redirect(url_for("login"))
 
-    return render_template("auth.html", mode="verify_password_reset", **options)
+    return render_template("auth.html", mode="verify_password_reset", ttl_seconds=RESEND_COOLDOWN, **options)
 
 
 @app.route("/recuperar-con-archivo", methods=["GET", "POST"])
@@ -2675,9 +2764,11 @@ def two_factor_verification():
             session.pop("pending_2fa_user", None)
             session.pop("two_factor", None)
             flash("El codigo vencio. Inicia sesion nuevamente.", "error")
+            logger.warning("2FA expirado para: %s", pending_user.get("correo"))
             return redirect(url_for("login"))
         if not verify_security_code(two_factor.get("code_hash"), code):
             flash("El codigo ingresado no es valido.", "error")
+            logger.warning("2FA codigo incorrecto para: %s", pending_user.get("correo"))
         else:
             session.pop("two_factor", None)
             user = session.pop("pending_2fa_user")
@@ -2687,13 +2778,78 @@ def two_factor_verification():
             session["email"] = user["correo"]
             session["user_type"] = user.get("tipo_usuario")
             session["user_type_id"] = user.get("id_tipo_usuario")
+            logger.info("2FA exitoso - sesion iniciada para: %s (ID %s)", user["usuario"], user["id"])
             flash(f"Bienvenido, {user['nombres']} {user['apellidos']}.", "success")
             pending_class_code = session.pop("pending_class_code", None)
             if pending_class_code:
                 return redirect(url_for("join_class_by_code", class_code=pending_class_code))
             return redirect(url_for(dashboard_endpoint_for_role(user.get("tipo_usuario"))))
 
-    return render_template("auth.html", mode="two_factor", **options)
+    return render_template("auth.html", mode="two_factor", ttl_seconds=RESEND_COOLDOWN, **options)
+
+
+@app.route("/verificacion/reenviar", methods=["POST"])
+def resend_two_factor_code():
+    pending_user = session.get("pending_2fa_user")
+    if not pending_user:
+        flash("Inicia sesion para recibir el codigo de verificacion.", "error")
+        return redirect(url_for("login"))
+
+    code = make_security_code()
+    session["two_factor"] = {
+        "code_hash": hash_security_code(code),
+        "expires_at": time.time() + SECURITY_CODE_TTL,
+    }
+    ok, mail_error = send_email_message(
+        pending_user["correo"],
+        f"Codigo de verificacion Ecovigilante: {code}",
+        f"Tu codigo de verificacion es: {code}\n\nVence en 1 minuto.",
+    )
+    if ok:
+        logger.info("2FA reenviado a: %s", pending_user.get("correo"))
+        flash("Reenviamos un codigo de verificacion a tu correo.", "success")
+    else:
+        session.pop("pending_2fa_user", None)
+        session.pop("two_factor", None)
+        flash(mail_error, "error")
+        logger.error("Error al reenviar 2FA a %s: %s", pending_user.get("correo"), mail_error)
+    return redirect(url_for("two_factor_verification"))
+
+
+@app.route("/verificacion/reenviar-recuperacion", methods=["POST"])
+def resend_password_reset_code():
+    recovery = session.get("password_reset")
+    if not recovery:
+        flash("Solicita primero la recuperacion de contrasena.", "error")
+        return redirect(url_for("forgot_password"))
+
+    email = recovery.get("email")
+    user_id = recovery.get("user_id")
+    if not email or not user_id:
+        session.pop("password_reset", None)
+        flash("Sesion expirada. Solicita un nuevo codigo.", "error")
+        return redirect(url_for("forgot_password"))
+
+    code = make_security_code()
+    session["password_reset"] = {
+        "user_id": user_id,
+        "email": email,
+        "code_hash": hash_security_code(code),
+        "expires_at": time.time() + SECURITY_CODE_TTL,
+    }
+    ok, mail_error = send_email_message(
+        email,
+        f"Codigo de recuperacion Ecovigilante: {code}",
+        f"Tu codigo de recuperacion es: {code}\n\nVence en 1 minuto.",
+    )
+    if ok:
+        logger.info("Codigo de recuperacion reenviado a: %s", email)
+        flash("Reenviamos un codigo de recuperacion a tu correo.", "success")
+    else:
+        session.pop("password_reset", None)
+        flash(mail_error, "error")
+        logger.error("Error al reenviar codigo de recuperacion a %s: %s", email, mail_error)
+    return redirect(url_for("verify_password_reset"))
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -2709,6 +2865,7 @@ def login():
             user, message = validate_login(correo, contrasena)
             flash(message, "success" if user else "error")
             if user:
+                logger.info("Inicio de sesion exitoso: %s (%s)", user["usuario"], correo)
                 code = make_security_code()
                 session["pending_2fa_user"] = {
                     "id": user["id"],
@@ -2726,7 +2883,7 @@ def login():
                 ok, mail_error = send_email_message(
                     user["correo"],
                     f"Codigo de verificacion Ecovigilante: {code}",
-                    f"Tu codigo de verificacion es: {code}\n\nVence en 10 minutos.",
+                    f"Tu codigo de verificacion es: {code}\n\nVence en 1 minuto.",
                 )
                 if ok:
                     flash("Enviamos un codigo de verificacion a tu correo.", "success")
@@ -2734,16 +2891,42 @@ def login():
                 session.pop("pending_2fa_user", None)
                 session.pop("two_factor", None)
                 flash(mail_error, "error")
+            else:
+                logger.warning("Intento de inicio de sesion fallido para: %s", correo)
 
     return render_template("auth.html", mode="login", **options)
 
 
 @app.route("/cerrar-sesion")
 def logout():
+    logger.info("Sesion cerrada por usuario ID %s", session.get("user_id", "desconocido"))
     session.clear()
     flash("La sesion se cerro correctamente.", "success")
-    return redirect(url_for("home"))
+    resp = make_response(redirect(url_for("home")))
+    resp.headers["Clear-Site-Data"] = '"cache", "storage"'
+    return resp
+
+
+@app.after_request
+def prevent_back_after_logout(response):
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, post-check=0, pre-check=0, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    if response.content_type and "text/html" in response.content_type:
+        try:
+            html = response.get_data(as_text=True)
+            script = '<script>window.addEventListener("pageshow",function(e){if(e.persisted)location.reload()})</script>'
+            if script not in html and "</body>" in html:
+                response.set_data(html.replace("</body>", script + "\n</body>"))
+        except Exception:
+            pass
+    return response
 
 
 if __name__ == "__main__":
+    logger.info("=" * 50)
+    logger.info("Servidor Ecovigilante iniciado")
+    logger.info("Directorio base: %s", BASE_DIR)
+    logger.info("Archivo de logs: %s", LOG_DIR / "ecovigilante.log")
+    logger.info("=" * 50)
     app.run(debug=True)

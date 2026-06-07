@@ -1034,6 +1034,45 @@ body {
     color: var(--muted);
 }
 
+.disposal-result {
+    margin-top: 12px;
+    padding: 16px 20px;
+    border-radius: var(--radius-lg);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    animation: slideUp 0.3s ease;
+    border: 2px solid;
+}
+.disposal-result.correcto {
+    background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+    border-color: #22c55e;
+}
+.disposal-result.incorrecto {
+    background: linear-gradient(135deg, #fef2f2, #fee2e2);
+    border-color: #ef4444;
+}
+.disposal-icon {
+    font-size: 32px;
+    line-height: 1;
+}
+.disposal-text {
+    font-size: 18px;
+    font-weight: 800;
+    font-family: "Sora", sans-serif;
+}
+.disposal-result.correcto .disposal-text {
+    color: #166534;
+}
+.disposal-result.incorrecto .disposal-text {
+    color: #991b1b;
+}
+.disposal-detail {
+    font-size: 13px;
+    color: var(--muted);
+    margin-top: 2px;
+}
+
 .camera-page .face-recognition-result {
     gap: 8px;
     align-content: center;
